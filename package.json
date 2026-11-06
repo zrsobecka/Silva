@@ -1,0 +1,51 @@
+{
+  "name": "silva",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "tauri": "tauri",
+    "check:all": "pwsh -NoProfile -File scripts/Silva-Check.ps1",
+    "update:local": "pwsh -NoProfile -File scripts/Silva-Update.ps1",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "lucide-react": "^0.544.0",
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@tailwindcss/vite": "^4.1.0",
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^6.0.2",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7",
+    "globals": "^16.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.50.0",
+    "vite": "^8.0.16",
+    "vitest": "^4"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,md,yml}": "prettier --write"
+  }
+}

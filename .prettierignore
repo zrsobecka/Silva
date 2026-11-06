@@ -1,0 +1,9 @@
+node_modules/
+frontend/dist/
+src-tauri/target/
+src-tauri/gen/
+/src-tauri/tauri.windows.conf.json
+/app/
+.cargo/
+.tmp/
+package-lock.json
