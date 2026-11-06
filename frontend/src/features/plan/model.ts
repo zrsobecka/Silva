@@ -1,3 +1,5 @@
+import { towerNames, type Contribution, type ContributionDraft } from "../contributions/model";
+
 export const cadences = {
   daily: "Codziennie",
   weekly: "Co tydzień",
@@ -12,6 +14,7 @@ export type TaskDraft = {
   id?: number;
   title: string;
   category: string;
+  tower?: string | null;
   cadence: Cadence;
   detail: string;
   scheduledFor: string | null;
@@ -28,6 +31,7 @@ export type Entry = {
   taskId: number;
   title: string;
   category: string;
+  tower?: string | null;
   day: string;
   kind: "complete" | "step";
   note: string;
@@ -37,6 +41,7 @@ export type Snapshot = {
   today: string;
   tasks: Task[];
   entries: Entry[];
+  contributions: Contribution[];
 };
 
 export type Action =
@@ -44,14 +49,16 @@ export type Action =
   | { type: "archive"; id: number; archived: boolean }
   | { type: "complete"; id: number; done: boolean }
   | { type: "addStep"; id: number; note: string }
-  | { type: "removeStep"; id: number };
+  | { type: "removeStep"; id: number }
+  | { type: "saveContribution"; draft: ContributionDraft }
+  | { type: "removeContribution"; id: number };
 
 const defaultCategories = ["Dom", "Gry", "Nauka", "Praca", "Ruch", "Samodzielność"];
 
 export function allCategories(tasks: Task[]) {
-  return [...new Set([...defaultCategories, ...tasks.map((task) => task.category)])].sort(
-    (first, second) => first.localeCompare(second, "pl"),
-  );
+  return [
+    ...new Set([...defaultCategories, ...towerNames, ...tasks.map((task) => task.category)]),
+  ].sort((first, second) => first.localeCompare(second, "pl"));
 }
 
 export function groupTasks(tasks: Task[]) {

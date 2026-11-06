@@ -3,6 +3,9 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::{path::Path, time::Duration};
 
+mod contributions;
+pub use contributions::web_link;
+
 #[derive(Debug)]
 pub enum Error {
     Input(&'static str),
@@ -23,6 +26,7 @@ pub struct Snapshot {
     today: String,
     tasks: Vec<Task>,
     entries: Vec<Entry>,
+    contributions: Vec<contributions::Contribution>,
 }
 
 #[derive(Debug, Serialize)]
@@ -31,6 +35,7 @@ struct Task {
     id: i64,
     title: String,
     category: String,
+    tower: Option<String>,
     cadence: String,
     detail: String,
     scheduled_for: Option<String>,
@@ -45,6 +50,7 @@ struct Entry {
     task_id: i64,
     title: String,
     category: String,
+    tower: Option<String>,
     day: String,
     kind: String,
     note: String,
@@ -56,6 +62,7 @@ pub struct Draft {
     id: Option<i64>,
     title: String,
     category: String,
+    tower: Option<String>,
     cadence: String,
     detail: String,
     scheduled_for: Option<String>,
@@ -69,13 +76,18 @@ pub enum Action {
     Complete { id: i64, done: bool },
     AddStep { id: i64, note: String },
     RemoveStep { id: i64 },
+    SaveContribution { draft: contributions::Draft },
+    RemoveContribution { id: i64 },
 }
 
 pub struct Store(Connection);
 
 impl Store {
     pub fn open(path: &Path) -> rusqlite::Result<Self> {
-        let mut connection = Connection::open(path)?;
+        Self::initialize(Connection::open(path)?)
+    }
+
+    fn initialize(mut connection: Connection) -> rusqlite::Result<Self> {
         connection.busy_timeout(Duration::from_secs(3))?;
         connection.execute_batch("PRAGMA foreign_keys = ON")?;
         let transaction =
@@ -85,8 +97,17 @@ impl Store {
             transaction.pragma_query_value(None, "user_version", |row| row.get(0))?;
         match version {
             0 => transaction.execute_batch(include_str!("schema.sql"))?,
-            1 => {}
+            1..=3 => {}
             _ => return Err(rusqlite::Error::InvalidQuery),
+        }
+        if version < 2 {
+            transaction.execute_batch(contributions::MIGRATION)?;
+        }
+        if version < 3 {
+            transaction.execute_batch(
+                "ALTER TABLE tasks ADD COLUMN tower TEXT;
+                 PRAGMA user_version = 3;",
+            )?;
         }
         transaction.commit()?;
         Ok(Self(connection))
@@ -120,6 +141,10 @@ impl Store {
             Action::RemoveStep { id } => {
                 transaction.execute("DELETE FROM entries WHERE id = ?1 AND kind = 'step'", [id])?;
             }
+            Action::SaveContribution { draft } => contributions::save(&transaction, draft, day)?,
+            Action::RemoveContribution { id } => {
+                transaction.execute("DELETE FROM contributions WHERE id = ?1", [id])?;
+            }
         }
         let result = snapshot(&transaction, day)?;
         transaction.commit()?;
@@ -131,7 +156,7 @@ fn snapshot(connection: &Connection, day: NaiveDate) -> Result<Snapshot> {
     let mut query = connection.prepare(
         "SELECT id, title, category, cadence, detail, scheduled_for, archived,
           EXISTS(SELECT 1 FROM entries WHERE task_id = tasks.id AND period = CASE tasks.cadence
-            WHEN 'daily' THEN ?1 WHEN 'weekly' THEN ?2 WHEN 'monthly' THEN ?3 ELSE tasks.cadence END)
+            WHEN 'daily' THEN ?1 WHEN 'weekly' THEN ?2 WHEN 'monthly' THEN ?3 ELSE tasks.cadence END), tower
          FROM tasks ORDER BY id",
     )?;
     let tasks = query
@@ -151,13 +176,15 @@ fn snapshot(connection: &Connection, day: NaiveDate) -> Result<Snapshot> {
                     scheduled_for: row.get(5)?,
                     archived: row.get(6)?,
                     done: row.get(7)?,
+                    tower: row.get(8)?,
                 })
             },
         )?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     let mut query = connection.prepare(
-        "SELECT id, task_id, title, category, day, kind, note FROM entries ORDER BY day DESC, id DESC",
+        "SELECT entries.id, task_id, entries.title, entries.category, day, kind, note, tasks.tower
+         FROM entries LEFT JOIN tasks ON tasks.id = entries.task_id ORDER BY day DESC, entries.id DESC",
     )?;
     let entries = query
         .query_map([], |row| {
@@ -169,6 +196,7 @@ fn snapshot(connection: &Connection, day: NaiveDate) -> Result<Snapshot> {
                 day: row.get(4)?,
                 kind: row.get(5)?,
                 note: row.get(6)?,
+                tower: row.get(7)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -177,12 +205,18 @@ fn snapshot(connection: &Connection, day: NaiveDate) -> Result<Snapshot> {
         today: day.to_string(),
         tasks,
         entries,
+        contributions: contributions::list(connection)?,
     })
 }
 
 fn save(connection: &Connection, draft: Draft) -> Result<()> {
     let title = required(&draft.title, 100, "Podaj nazwę do 100 znaków.")?;
     let category = required(&draft.category, 32, "Podaj grupę do 32 znaków.")?;
+    let tower = draft
+        .tower
+        .as_deref()
+        .map(|name| required(name, 32, "Podaj nazwę wieży do 32 znaków."))
+        .transpose()?;
     let detail = draft.detail.trim();
     if detail.chars().count() > 240 {
         return Err(Error::Input("Opis może mieć najwyżej 240 znaków."));
@@ -204,15 +238,15 @@ fn save(connection: &Connection, draft: Draft) -> Result<()> {
 
     if let Some(id) = draft.id {
         if connection.execute(
-            "UPDATE tasks SET title = ?1, category = ?2, cadence = ?3, detail = ?4, scheduled_for = ?5 WHERE id = ?6",
-            params![title, category, draft.cadence, detail, scheduled_for, id],
+            "UPDATE tasks SET title = ?1, category = ?2, cadence = ?3, detail = ?4, scheduled_for = ?5, tower = ?6 WHERE id = ?7",
+            params![title, category, draft.cadence, detail, scheduled_for, tower, id],
         )? == 0 {
             return Err(Error::Input("To zadanie już nie istnieje."));
         }
     } else {
         connection.execute(
-            "INSERT INTO tasks (title, category, cadence, detail, scheduled_for) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![title, category, draft.cadence, detail, scheduled_for],
+            "INSERT INTO tasks (title, category, cadence, detail, scheduled_for, tower) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![title, category, draft.cadence, detail, scheduled_for, tower],
         )?;
     }
     Ok(())
@@ -321,6 +355,99 @@ mod tests {
         let result = store.read().unwrap();
         assert!(result.tasks.is_empty());
         assert!(result.entries.is_empty());
+        assert!(result.contributions.is_empty());
+    }
+
+    #[test]
+    fn a_tower_assignment_reaches_past_and_new_entries_without_changing_their_group() {
+        let mut store = store_with_tasks();
+        let yesterday = day(2026, 11, 5);
+        let today = day(2026, 11, 6);
+        complete_on(&mut store, 1, yesterday);
+        let change_tower = |tower: Option<&str>| Action::Save {
+            draft: Draft {
+                id: Some(1),
+                title: "Uporządkować notatki".into(),
+                category: "Organizacja".into(),
+                tower: tower.map(str::to_owned),
+                cadence: "daily".into(),
+                detail: String::new(),
+                scheduled_for: None,
+            },
+        };
+        let result = store.apply_on(change_tower(Some("Nauka")), today).unwrap();
+        assert_eq!(result.tasks[0].category, "Organizacja");
+        assert_eq!(result.entries.len(), 1);
+        assert_eq!(result.entries[0].category, "Organizacja");
+        assert_eq!(result.entries[0].tower.as_deref(), Some("Nauka"));
+
+        complete_on(&mut store, 1, today);
+        let result = complete_on(&mut store, 1, today);
+        assert_eq!(result.entries.len(), 2);
+        assert!(result
+            .entries
+            .iter()
+            .all(|entry| entry.tower.as_deref() == Some("Nauka")));
+        let result = store.apply_on(change_tower(None), today).unwrap();
+        assert_eq!(result.entries.len(), 2);
+        assert!(result.entries.iter().all(|entry| entry.tower.is_none()));
+    }
+
+    #[test]
+    fn upgrading_version_one_preserves_history_and_supports_adding_editing_and_removing_contributions(
+    ) {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(include_str!("schema.sql"))
+            .unwrap();
+        connection.execute_batch(
+            "INSERT INTO tasks (id, title, category, cadence) VALUES (1, 'Zagrać', 'LoL', 'daily');
+             INSERT INTO entries (task_id, title, category, day, kind, period)
+             VALUES (1, 'Zagrać', 'LoL', '2026-11-05', 'complete', '2026-11-05');",
+        ).unwrap();
+        let mut store = Store::initialize(connection).unwrap();
+        let today = day(2026, 11, 6);
+        let save = |id, solo| {
+            serde_json::from_value(serde_json::json!({
+                "type": "saveContribution", "draft": {
+                    "id": id, "title": "Wieczorne mecze", "category": "League of Legends",
+                    "day": "2026-11-05", "metrics": { "soloQueue": solo, "flex": 1 },
+                    "link": "https://example.com/mecze"
+                }
+            }))
+            .unwrap()
+        };
+        let result = store.apply_on(save(None, 2), today).unwrap();
+        assert_eq!(result.entries.len(), 1);
+        assert_eq!(result.entries[0].category, "LoL");
+        let saved = serde_json::to_value(&result.contributions[0]).unwrap();
+        let id = saved["id"].as_i64().unwrap();
+        assert_eq!(saved["day"], "2026-11-05");
+        assert_eq!(saved["link"], "https://example.com/mecze");
+        assert_eq!(
+            saved["metrics"],
+            serde_json::json!({ "soloQueue": 2, "flex": 1 })
+        );
+        assert!(matches!(
+            store.apply_on(save(Some(id), 0), today),
+            Err(Error::Input(_))
+        ));
+        let unchanged = store.read().unwrap();
+        assert_eq!(
+            serde_json::to_value(&unchanged.contributions[0]).unwrap(),
+            saved
+        );
+        let edited = store.apply_on(save(Some(id), 3), today).unwrap();
+        assert_eq!(edited.contributions.len(), 1);
+        assert_eq!(
+            serde_json::to_value(&edited.contributions[0]).unwrap()["metrics"]["soloQueue"],
+            3
+        );
+        let result = store
+            .apply_on(Action::RemoveContribution { id }, today)
+            .unwrap();
+        assert!(result.contributions.is_empty());
+        assert_eq!(result.entries.len(), 1);
     }
 
     #[test]
@@ -387,6 +514,7 @@ mod tests {
             id: Some(4),
             title: "Przygotować wystawę objazdową".into(),
             category: "Praca".into(),
+            tower: None,
             cadence: "goal".into(),
             detail: String::new(),
             scheduled_for: None,
@@ -406,6 +534,7 @@ mod tests {
             id: None,
             title: "Zakupy".into(),
             category: "Dom".into(),
+            tower: None,
             cadence: "once".into(),
             detail: String::new(),
             scheduled_for: Some("2026-11-07".into()),

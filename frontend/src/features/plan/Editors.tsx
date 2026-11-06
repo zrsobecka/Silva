@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Archive, Check, CirclePlus, RotateCcw, Trash2, X } from "lucide-react";
+import { towerName } from "../contributions/model";
 import {
   cadences,
   dateLabel,
@@ -10,7 +11,7 @@ import {
   type TaskDraft,
 } from "./model";
 
-function Modal({
+export function Modal({
   title,
   subtitle,
   busy,
@@ -72,6 +73,7 @@ export function TaskEditor({
   task,
   initialCadence,
   categories,
+  towers,
   busy,
   error,
   onClose,
@@ -81,6 +83,7 @@ export function TaskEditor({
   task?: Task;
   initialCadence: Cadence;
   categories: string[];
+  towers: string[];
   busy: boolean;
   error: string;
   onClose: () => void;
@@ -96,6 +99,7 @@ export function TaskEditor({
       id: task?.id,
       title: String(fields.get("title") ?? "").trim(),
       category: String(fields.get("category") ?? "").trim(),
+      tower: String(fields.get("tower") ?? "") || null,
       detail: String(fields.get("detail") ?? "").trim(),
       cadence,
       scheduledFor: String(fields.get("date") ?? "") || null,
@@ -150,6 +154,25 @@ export function TaskEditor({
             </select>
           </label>
         </div>
+        <label className="field">
+          Wieża postępu
+          <select
+            name="tower"
+            defaultValue={task?.tower ? towerName(task.tower) : ""}
+            aria-describedby="task-tower-help"
+          >
+            <option value="">Według grupy z planu</option>
+            {towers.map((tower) => (
+              <option key={tower} value={tower}>
+                {tower}
+              </option>
+            ))}
+          </select>
+          <span id="task-tower-help" className="form-help">
+            Tutaj trafią wcześniejsze i przyszłe wpisy tego zadania. Grupa w Planie pozostaje bez
+            zmian.
+          </span>
+        </label>
         {cadence === "once" && (
           <label className="field">
             Termin (opcjonalnie)

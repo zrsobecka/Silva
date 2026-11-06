@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
+  BrickWall,
   CalendarDays,
   ChartNoAxesCombined,
   Check,
@@ -10,6 +11,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import logo from "../assets/brand/silva.png";
+import { ContributionEditor } from "../features/contributions/ContributionEditor";
+import { categoryKey, towerName, type Contribution } from "../features/contributions/model";
 import { GoalEditor, TaskEditor } from "../features/plan/Editors";
 import { Plan } from "../features/plan/Plan";
 import { Today } from "../features/plan/Today";
@@ -21,7 +24,7 @@ import {
   type Task,
 } from "../features/plan/model";
 import { Progress } from "../features/progress/Progress";
-import { readPlan, updatePlan } from "../infrastructure/plan";
+import { openContributionLink, readPlan, updatePlan } from "../infrastructure/plan";
 
 const views = {
   today: {
@@ -42,7 +45,11 @@ const views = {
 } as const;
 
 type View = keyof typeof views;
-type Editor = { type: "task"; id?: number } | { type: "goal"; id: number } | null;
+type Editor =
+  | { type: "task"; id?: number }
+  | { type: "goal"; id: number }
+  | { type: "contribution"; entry?: Contribution; category?: string }
+  | null;
 
 function errorMessage(error: unknown) {
   return typeof error === "string"
@@ -157,7 +164,25 @@ export function App() {
     );
   }
 
-  const activeTask = editor && snapshot?.tasks.find((task) => task.id === editor.id);
+  const activeTask =
+    editor &&
+    editor.type !== "contribution" &&
+    snapshot?.tasks.find((task) => task.id === editor.id);
+  const towers =
+    snapshot && (editor?.type === "task" || editor?.type === "contribution")
+      ? [
+          ...new Map(
+            [
+              ...allCategories(snapshot.tasks),
+              ...snapshot.tasks.flatMap((task) => (task.tower ? [task.tower] : [])),
+              ...snapshot.entries.map((entry) => entry.category),
+              ...snapshot.contributions.map((entry) => entry.category),
+            ]
+              .map(towerName)
+              .map((name) => [categoryKey(name), name]),
+          ).values(),
+        ].sort((first, second) => first.localeCompare(second, "pl"))
+      : [];
   const controls = {
     today: snapshot?.today ?? "",
     busy,
@@ -224,14 +249,23 @@ export function App() {
             <h1>{views[view].label}</h1>
             <p>{views[view].description}</p>
           </div>
-          <button
-            className="primary-button header-add"
-            onClick={openNew}
-            disabled={!snapshot}
-            title="Dodaj zadanie (Ctrl+N)"
-          >
-            <Plus size={20} /> Dodaj zadanie
-          </button>
+          <div className="header-actions">
+            <button
+              className={`${view === "plan" ? "primary-button" : "secondary-button"} header-add`}
+              onClick={openNew}
+              disabled={!snapshot}
+              title="Dodaj zadanie (Ctrl+N)"
+            >
+              <Plus size={18} /> Dodaj zadanie
+            </button>
+            <button
+              className={`${view === "plan" ? "secondary-button" : "primary-button"} header-add`}
+              disabled={!snapshot}
+              onClick={() => openEditor({ type: "contribution" })}
+            >
+              <BrickWall size={18} /> Dodaj wkład
+            </button>
+          </div>
         </header>
         {!editor && error && (
           <div className="error-banner" role="alert">
@@ -274,7 +308,18 @@ export function App() {
           <Plan tasks={snapshot.tasks} controls={controls} onNew={openNew} />
         )}
         {snapshot && view === "progress" && (
-          <Progress snapshot={snapshot} onToday={() => navigate("today")} />
+          <Progress
+            snapshot={snapshot}
+            onToday={() => navigate("today")}
+            onAdd={(category) => openEditor({ type: "contribution", category })}
+            onEdit={(entry) => openEditor({ type: "contribution", entry })}
+            onLink={(link) => {
+              setError("");
+              void openContributionLink(link).catch((error: unknown) =>
+                setError(errorMessage(error)),
+              );
+            }}
+          />
         )}
       </main>
       {snapshot && editor?.type === "task" && (
@@ -283,6 +328,7 @@ export function App() {
           task={activeTask || undefined}
           initialCadence="once"
           categories={allCategories(snapshot.tasks)}
+          towers={towers}
           busy={busy}
           error={error}
           onClose={closeEditor}
@@ -316,6 +362,27 @@ export function App() {
             void run({ type: "removeStep", id }, "Usunięto krok.");
           }}
           onComplete={complete}
+        />
+      )}
+      {snapshot && editor?.type === "contribution" && (
+        <ContributionEditor
+          entry={editor.entry}
+          initialCategory={editor.category}
+          categories={towers}
+          today={snapshot.today}
+          busy={busy}
+          error={error}
+          onClose={closeEditor}
+          onSave={async (draft) => {
+            const message = draft.id
+              ? "Zapisano zmiany we wkładzie."
+              : `Dodano cegiełkę do wieży „${draft.category}”.`;
+            if (await run({ type: "saveContribution", draft }, message)) closeEditor();
+          }}
+          onRemove={async (id) => {
+            if (await run({ type: "removeContribution", id }, "Usunięto wkład i jego cegiełkę."))
+              closeEditor();
+          }}
         />
       )}
     </div>

@@ -1,8 +1,12 @@
-import { calendarDate, dateKey, type Entry } from "../plan/model";
+import { categoryKey, towerName, type ActivityEntry } from "../contributions/model";
+import { calendarDate, dateKey } from "../plan/model";
 
-export function summarize(entries: Entry[], period: string, category: string) {
+export function summarize(entries: ActivityEntry[], period: string, category: string) {
+  const filter = categoryKey(towerName(category));
   const shown = entries.filter(
-    (entry) => entry.day.startsWith(period + "-") && (!category || entry.category === category),
+    (entry) =>
+      entry.day.startsWith(period + "-") &&
+      (!filter || categoryKey(towerName(entry.category)) === filter),
   );
   const days = new Map<string, number>();
   const months = new Map<string, number>();

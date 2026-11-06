@@ -4,15 +4,16 @@ import {
   ArrowRight,
   CalendarDays,
   ChartNoAxesCombined,
-  Check,
   ChevronLeft,
   ChevronRight,
   Footprints,
   ListChecks,
 } from "lucide-react";
-import { CategoryIcon } from "../plan/CategoryIcon";
+import { activityHistory, groupTowers, type Contribution } from "../contributions/model";
 import { dateLabel, entryCount, type Snapshot } from "../plan/model";
+import { ActivityRows } from "./ActivityRows";
 import { monthCalendar, shiftMonth, summarize } from "./analytics";
+import { Towers } from "./Towers";
 
 const weekdays = ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"];
 type Range = "month" | "year";
@@ -115,7 +116,19 @@ function YearChart({
   );
 }
 
-export function Progress({ snapshot, onToday }: { snapshot: Snapshot; onToday: () => void }) {
+export function Progress({
+  snapshot,
+  onToday,
+  onAdd,
+  onEdit,
+  onLink,
+}: {
+  snapshot: Snapshot;
+  onToday: () => void;
+  onAdd: (category: string) => void;
+  onEdit: (entry: Contribution) => void;
+  onLink: (link: string) => void;
+}) {
   const currentMonth = snapshot.today.slice(0, 7);
   const [month, setMonth] = useState(currentMonth);
   const [range, setRange] = useState<Range>("month");
@@ -123,10 +136,13 @@ export function Progress({ snapshot, onToday }: { snapshot: Snapshot; onToday: (
   const [selectedDay, setSelectedDay] = useState("");
   const [expanded, setExpanded] = useState(false);
   const year = month.slice(0, 4);
-  const categories = [...new Set(snapshot.entries.map((entry) => entry.category))].sort((a, b) =>
+  const history = activityHistory(snapshot.entries, snapshot.contributions);
+  const towers = groupTowers(history, snapshot.tasks);
+  const categories = Array.from(towers.values(), (tower) => tower.name).sort((a, b) =>
     a.localeCompare(b, "pl"),
   );
-  const summary = summarize(snapshot.entries, range === "month" ? month : year, category);
+  const categoryFilter = categories.includes(category) ? category : "";
+  const summary = summarize(history, range === "month" ? month : year, categoryFilter);
   const activity = selectedDay
     ? summary.shown.filter((entry) => entry.day === selectedDay)
     : summary.shown;
@@ -148,6 +164,7 @@ export function Progress({ snapshot, onToday }: { snapshot: Snapshot; onToday: (
 
   return (
     <div className="view-stack">
+      <Towers towers={towers} onAdd={onAdd} onEdit={onEdit} onLink={onLink} />
       <div className="panel-toolbar">
         <div className="segmented" aria-label="Zakres postępu">
           <button aria-pressed={range === "month"} onClick={() => changeRange("month")}>
@@ -160,7 +177,7 @@ export function Progress({ snapshot, onToday }: { snapshot: Snapshot; onToday: (
         <label className="filter">
           <span>Grupa</span>
           <select
-            value={category}
+            value={categoryFilter}
             onChange={(event) => {
               setCategory(event.target.value);
               setExpanded(false);
@@ -269,26 +286,11 @@ export function Progress({ snapshot, onToday }: { snapshot: Snapshot; onToday: (
           </div>
         ) : (
           <>
-            <ul className="task-list">
-              {(expanded ? activity : activity.slice(0, 10)).map((entry) => (
-                <li className="task-row" key={entry.id}>
-                  <CategoryIcon category={entry.category} />
-                  <div className="task-copy">
-                    <strong>{entry.kind === "step" ? entry.note : entry.title}</strong>
-                    <small>
-                      {entry.kind === "step" && `${entry.title} · `}
-                      {entry.category}
-                    </small>
-                  </div>
-                  <span className="entry-kind">
-                    {entry.kind === "step" ? <Footprints size={15} /> : <Check size={15} />}
-                  </span>
-                  <time dateTime={entry.day}>
-                    {dateLabel(entry.day, { day: "numeric", month: "short" })}
-                  </time>
-                </li>
-              ))}
-            </ul>
+            <ActivityRows
+              entries={expanded ? activity : activity.slice(0, 10)}
+              onEdit={onEdit}
+              onLink={onLink}
+            />
             {activity.length > 10 && (
               <button className="quiet-button show-more" onClick={() => setExpanded(!expanded)}>
                 {expanded ? "Pokaż mniej" : "Pokaż wszystkie wpisy"}
