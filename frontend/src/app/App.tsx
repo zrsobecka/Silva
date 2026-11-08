@@ -12,14 +12,20 @@ import {
 } from "lucide-react";
 import logo from "../assets/brand/silva.png";
 import { ContributionEditor } from "../features/contributions/ContributionEditor";
-import { categoryKey, towerName, type Contribution } from "../features/contributions/model";
+import {
+  activityOptions,
+  categoryKey,
+  towerNames,
+  type Contribution,
+} from "../features/contributions/model";
 import { GoalEditor, TaskEditor } from "../features/plan/Editors";
 import { Plan } from "../features/plan/Plan";
 import { Today } from "../features/plan/Today";
 import {
-  allCategories,
   dateLabel,
   type Action,
+  type Cadence,
+  type PlanGroup,
   type Snapshot,
   type Task,
 } from "../features/plan/model";
@@ -35,7 +41,7 @@ const views = {
   plan: {
     label: "Plan",
     icon: Layers3,
-    description: "Zarządzaj zadaniami, grupami i długoterminowymi celami.",
+    description: "Zaplanuj zadania, nawyki, cele i sprawy związane z pracą.",
   },
   progress: {
     label: "Postęp",
@@ -46,7 +52,7 @@ const views = {
 
 type View = keyof typeof views;
 type Editor =
-  | { type: "task"; id?: number }
+  | { type: "task"; id?: number; cadence?: Cadence; activity?: string; group?: PlanGroup }
   | { type: "goal"; id: number }
   | { type: "contribution"; entry?: Contribution; category?: string }
   | null;
@@ -59,6 +65,7 @@ function errorMessage(error: unknown) {
 
 export function App() {
   const [view, setView] = useState<View>("today");
+  const [planByGroup, setPlanByGroup] = useState(true);
   const [editor, setEditor] = useState<Editor>(null);
   const [snapshot, setSnapshot] = useState<Snapshot>();
   const [busy, setBusy] = useState(false);
@@ -168,21 +175,12 @@ export function App() {
     editor &&
     editor.type !== "contribution" &&
     snapshot?.tasks.find((task) => task.id === editor.id);
-  const towers =
-    snapshot && (editor?.type === "task" || editor?.type === "contribution")
-      ? [
-          ...new Map(
-            [
-              ...allCategories(snapshot.tasks),
-              ...snapshot.tasks.flatMap((task) => (task.tower ? [task.tower] : [])),
-              ...snapshot.entries.map((entry) => entry.category),
-              ...snapshot.contributions.map((entry) => entry.category),
-            ]
-              .map(towerName)
-              .map((name) => [categoryKey(name), name]),
-          ).values(),
-        ].sort((first, second) => first.localeCompare(second, "pl"))
-      : [];
+  const activities = snapshot ? activityOptions(snapshot) : [];
+  const activitySuggestions = [
+    ...new Map(
+      [...towerNames, ...activities.filter(Boolean)].map((name) => [categoryKey(name), name]),
+    ).values(),
+  ].sort((a, b) => a.localeCompare(b, "pl"));
   const controls = {
     today: snapshot?.today ?? "",
     busy,
@@ -306,7 +304,8 @@ export function App() {
                   type: "save",
                   draft: {
                     title,
-                    category: "Sprawy bieżące",
+                    category: "",
+                    tower: "",
                     cadence: "once",
                     detail: "",
                     scheduledFor: null,
@@ -325,11 +324,21 @@ export function App() {
           />
         )}
         {snapshot && view === "plan" && (
-          <Plan tasks={snapshot.tasks} controls={controls} onNew={openNew} />
+          <Plan
+            tasks={snapshot.tasks}
+            activities={activities}
+            byGroup={planByGroup}
+            controls={controls}
+            onNew={(cadence, activity, group) =>
+              openEditor({ type: "task", cadence, activity, group })
+            }
+            onGroupChange={setPlanByGroup}
+          />
         )}
         {snapshot && view === "progress" && (
           <Progress
             snapshot={snapshot}
+            activities={activities}
             onToday={() => navigate("today")}
             onAdd={(category) => openEditor({ type: "contribution", category })}
             onEdit={(entry) => openEditor({ type: "contribution", entry })}
@@ -346,9 +355,10 @@ export function App() {
         <TaskEditor
           key={editor.id ?? "new"}
           task={activeTask || undefined}
-          initialCadence="once"
-          categories={allCategories(snapshot.tasks)}
-          towers={towers}
+          initialCadence={editor.cadence ?? "once"}
+          initialActivity={editor.activity}
+          initialGroup={editor.group}
+          activities={activitySuggestions}
           busy={busy}
           error={error}
           onClose={closeEditor}
@@ -388,7 +398,7 @@ export function App() {
         <ContributionEditor
           entry={editor.entry}
           initialCategory={editor.category}
-          categories={towers}
+          categories={activitySuggestions}
           today={snapshot.today}
           busy={busy}
           error={error}

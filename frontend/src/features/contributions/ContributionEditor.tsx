@@ -60,7 +60,7 @@ export function ContributionEditor({
   return (
     <Modal
       title={entry ? "Edytuj wkład" : "Dodaj wkład"}
-      subtitle="WIEŻE POSTĘPU"
+      subtitle="POSTĘP"
       busy={busy}
       error={error}
       onClose={onClose}
@@ -79,15 +79,15 @@ export function ContributionEditor({
         </label>
         <div className="field-grid">
           <label className="field">
-            Obszar
+            Aktywność
             <input
               name="category"
               required
-              maxLength={32}
+              maxLength={100}
               list="contribution-categories"
               value={category}
               onChange={(event) => setCategory(event.target.value)}
-              placeholder="Wybierz lub wpisz nowy"
+              placeholder="Wybierz lub wpisz nową"
             />
             <datalist id="contribution-categories">
               {categories.map((value) => (

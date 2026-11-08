@@ -66,7 +66,7 @@ pub fn web_link(value: &str) -> Option<Url> {
 
 pub fn save(connection: &Connection, draft: Draft, today: NaiveDate) -> Result<()> {
     let title = required(&draft.title, 160, "Podaj opis do 160 znaków.")?;
-    let category = required(&draft.category, 32, "Podaj obszar do 32 znaków.")?;
+    let category = required(&draft.category, 100, "Podaj aktywność do 100 znaków.")?;
     let invalid_date = Error::Input("Wybierz datę od 2000 roku do dzisiaj.");
     let day = NaiveDate::parse_from_str(&draft.day, "%Y-%m-%d").map_err(|_| invalid_date)?;
     if day > today || day < NaiveDate::from_ymd_opt(2000, 1, 1).unwrap() {

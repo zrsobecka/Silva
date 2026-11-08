@@ -1,12 +1,15 @@
 import { useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Archive, Check, CirclePlus, RotateCcw, Trash2, X } from "lucide-react";
-import { towerName } from "../contributions/model";
+import { activityName, categoryKey, noActivityLabel, towerName } from "../contributions/model";
 import {
   cadences,
   dateLabel,
   entryCount,
+  planGroups,
+  storedPlanGroup,
   type Cadence,
   type Entry,
+  type PlanGroup,
   type Task,
   type TaskDraft,
 } from "./model";
@@ -72,8 +75,9 @@ export function Modal({
 export function TaskEditor({
   task,
   initialCadence,
-  categories,
-  towers,
+  initialActivity,
+  initialGroup,
+  activities,
   busy,
   error,
   onClose,
@@ -82,8 +86,9 @@ export function TaskEditor({
 }: {
   task?: Task;
   initialCadence: Cadence;
-  categories: string[];
-  towers: string[];
+  initialActivity?: string;
+  initialGroup?: PlanGroup;
+  activities: string[];
   busy: boolean;
   error: string;
   onClose: () => void;
@@ -91,15 +96,19 @@ export function TaskEditor({
   onArchive: (task: Task) => void;
 }) {
   const [cadence, setCadence] = useState<Cadence>(task?.cadence ?? initialCadence);
+  const currentActivity = task ? activityName(task) : (initialActivity ?? "");
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const fields = new FormData(event.currentTarget);
+    const activity = String(fields.get("tower") ?? "").trim();
+    const keepAssignment = task && categoryKey(activity) === categoryKey(currentActivity);
     onSave({
       id: task?.id,
       title: String(fields.get("title") ?? "").trim(),
-      category: String(fields.get("category") ?? "").trim(),
-      tower: String(fields.get("tower") ?? "") || null,
+      category: keepAssignment ? task.category : "",
+      tower: keepAssignment ? (task.tower ?? null) : towerName(activity),
+      planGroup: String(fields.get("planGroup") ?? ""),
       detail: String(fields.get("detail") ?? "").trim(),
       cadence,
       scheduledFor: String(fields.get("date") ?? "") || null,
@@ -128,20 +137,18 @@ export function TaskEditor({
         </label>
         <div className="field-grid">
           <label className="field">
-            Grupa
-            <input
-              name="category"
-              required
-              maxLength={32}
-              list="silva-categories"
-              defaultValue={task?.category}
-              placeholder="Wybierz lub wpisz nową"
-            />
-            <datalist id="silva-categories">
-              {categories.map((category) => (
-                <option key={category} value={category} />
+            Grupa w Planie
+            <select
+              name="planGroup"
+              defaultValue={(task ? storedPlanGroup(task) : initialGroup) ?? ""}
+            >
+              <option value="">Automatycznie według aktywności</option>
+              {planGroups.map((group) => (
+                <option key={group} value={group}>
+                  {group}
+                </option>
               ))}
-            </datalist>
+            </select>
           </label>
           <label className="field">
             Częstotliwość
@@ -155,24 +162,26 @@ export function TaskEditor({
           </label>
         </div>
         <label className="field">
-          Aktywność w postępie
-          <select
+          Aktywność w Postępie (opcjonalnie)
+          <input
             name="tower"
-            defaultValue={task?.tower ? towerName(task.tower) : ""}
-            aria-describedby="task-tower-help"
-          >
-            <option value="">Automatycznie: aktywność lub nazwa zadania</option>
-            {towers.map((tower) => (
-              <option key={tower} value={tower}>
-                {tower}
-              </option>
+            maxLength={100}
+            list="task-activities"
+            defaultValue={currentActivity}
+            placeholder={noActivityLabel}
+            aria-describedby="task-activity-help"
+          />
+          <datalist id="task-activities">
+            {activities.map((name) => (
+              <option key={name} value={name} />
             ))}
-          </select>
-          <span id="task-tower-help" className="form-help">
-            Tutaj trafią wcześniejsze i przyszłe wpisy tego zadania. Grupa w Planie pozostaje bez
-            zmian.
-          </span>
+          </datalist>
         </label>
+        <p id="task-activity-help" className="form-help">
+          {task
+            ? "Zmiana aktywności obejmie wcześniejsze i przyszłe wpisy tej pozycji."
+            : "Wybierz aktywność z listy, wpisz nową albo zostaw pole puste."}
+        </p>
         {cadence === "once" && (
           <label className="field">
             Termin (opcjonalnie)
@@ -256,7 +265,7 @@ export function GoalEditor({
   return (
     <Modal
       title={task.title}
-      subtitle={`CEL · ${task.category.toLocaleUpperCase("pl")}`}
+      subtitle={`CEL · ${(activityName(task) || noActivityLabel).toLocaleUpperCase("pl")}`}
       busy={busy}
       error={error}
       onClose={onClose}

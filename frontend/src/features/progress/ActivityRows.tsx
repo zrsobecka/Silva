@@ -1,5 +1,11 @@
 import { BrickWall, Check, ExternalLink, Footprints, Pencil } from "lucide-react";
-import { metricTotals, type ActivityEntry, type Contribution } from "../contributions/model";
+import {
+  activityName,
+  metricTotals,
+  noActivityLabel,
+  type ActivityEntry,
+  type Contribution,
+} from "../contributions/model";
 import { CategoryIcon } from "../plan/CategoryIcon";
 import { dateLabel } from "../plan/model";
 
@@ -16,18 +22,21 @@ export function ActivityRows({
     <ul className="task-list">
       {entries.map((entry) => {
         const manual = entry.kind === "contribution";
+        const activity = activityName(entry);
         const link = manual ? entry.link : null;
         const details = [
           ...(entry.kind === "step" ? [entry.title] : []),
-          entry.category,
+          ...(entry.kind === "step" || activity !== entry.title
+            ? [activity || noActivityLabel]
+            : []),
           ...(manual ? metricTotals(entry.metrics) : []),
         ];
         return (
           <li className="task-row activity-row" key={`${entry.kind}:${entry.id}`}>
-            <CategoryIcon category={entry.category} />
+            <CategoryIcon category={activity} />
             <div className="task-copy">
               <strong>{entry.kind === "step" ? entry.note : entry.title}</strong>
-              <small>{details.join(" · ")}</small>
+              {details.length > 0 && <small>{details.join(" · ")}</small>}
             </div>
             <span className="entry-kind" aria-hidden="true">
               {manual ? (

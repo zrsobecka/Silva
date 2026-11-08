@@ -1,7 +1,13 @@
 import type { CSSProperties } from "react";
-import { categoryKey, metricTotals, type ActivityEntry } from "../contributions/model";
+import {
+  activityMatches,
+  activityName,
+  metricTotals,
+  noActivityLabel,
+  type ActivityEntry,
+} from "../contributions/model";
 import { dateLabel, entryCount } from "../plan/model";
-import { activityColor, activityName, mosaicBuckets, type Range } from "./mosaicModel";
+import { activityColor, mosaicBuckets, type Range } from "./mosaicModel";
 
 export const entryKey = (entry: ActivityEntry) => `${entry.kind}:${entry.id}`;
 export const colorStyle = (name: string) =>
@@ -21,7 +27,7 @@ export function Mosaic({
   anchor: string;
   range: Range;
   today: string;
-  activity: string;
+  activity: string | null;
   selected: string;
   onSelect: (key: string) => void;
   onMonth: (day: string) => void;
@@ -32,9 +38,7 @@ export function Mosaic({
         const items = entries
           .filter((e) => e.day >= bucket.start && e.day <= bucket.end)
           .sort((a, b) => a.day.localeCompare(b.day) || a.id - b.id);
-        const matching = items.filter(
-          (e) => !activity || categoryKey(activityName(e)) === categoryKey(activity),
-        );
+        const matching = items.filter((entry) => activityMatches(entry, activity));
         const future = bucket.start > today;
         const label =
           range === "year"
@@ -46,7 +50,7 @@ export function Mosaic({
           <span className="mosaic-marks">
             {items.map((entry) => {
               const name = activityName(entry);
-              const dim = !!activity && categoryKey(activity) !== categoryKey(name);
+              const dim = !activityMatches(entry, activity);
               if (range === "year")
                 return (
                   <span
@@ -62,7 +66,14 @@ export function Mosaic({
                   : entry.kind === "step"
                     ? entry.note
                     : "";
-              const title = `${dateLabel(entry.day, { dateStyle: "long" })} · ${name} · ${entry.title}${detail ? ` · ${detail}` : ""}`;
+              const title = [
+                dateLabel(entry.day, { dateStyle: "long" }),
+                name === entry.title ? "" : name || noActivityLabel,
+                entry.title,
+                detail,
+              ]
+                .filter(Boolean)
+                .join(" · ");
               return (
                 <button
                   key={entryKey(entry)}

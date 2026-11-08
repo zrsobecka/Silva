@@ -1,19 +1,9 @@
-import { categoryKey, towerName, towerNames, type ActivityEntry } from "../contributions/model";
+import { categoryKey, towerName, type ActivityEntry } from "../contributions/model";
 import { calendarDate, dateKey } from "../plan/model";
 
 export type Range = "week" | "month" | "year";
-export function activityName(entry: {
-  category: string;
-  tower?: string | null;
-  title?: string;
-  kind?: string;
-}) {
-  if (entry.tower) return towerName(entry.tower);
-  const category = towerName(entry.category);
-  if (entry.kind === "contribution" || towerNames.includes(category)) return category;
-  return entry.title || category;
-}
 const colors: Record<string, string> = {
+  "": "#8a98a5",
   programowanie: "#58c3dc",
   cyberbezpieczeństwo: "#879fef",
   "czytanie książek": "#dfba63",

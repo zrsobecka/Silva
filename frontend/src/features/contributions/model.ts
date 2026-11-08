@@ -1,4 +1,4 @@
-import type { Entry, Task } from "../plan/model";
+import type { Entry, Snapshot, Task } from "../plan/model";
 
 const towerSettings = {
   Cyberbezpieczeństwo: ["minutes"],
@@ -46,6 +46,8 @@ export type ActivityEntry = Entry | (Contribution & { kind: "contribution" });
 export type Tower = { name: string; tasks: Task[]; entries: ActivityEntry[]; metrics: Metrics };
 
 export const towerNames = Object.keys(towerSettings);
+export const workActivity = "Praca";
+export const noActivityLabel = "Bez aktywności";
 
 export function categoryKey(name: string) {
   return name.trim().toLocaleLowerCase("pl");
@@ -57,6 +59,36 @@ export function towerName(name: string) {
     towerNames.find((tower) => categoryKey(tower) === key) ??
     (Object.hasOwn(aliases, key) ? aliases[key] : name.trim())
   );
+}
+
+export function activityName(entry: {
+  category: string;
+  tower?: string | null;
+  title: string;
+  kind?: string;
+}) {
+  // Null keeps the legacy assignment rule. An empty string explicitly opts out.
+  if (entry.tower != null) return towerName(entry.tower);
+  const category = towerName(entry.category);
+  if (entry.kind === "contribution" || towerNames.includes(category)) return category;
+  return entry.title || category;
+}
+
+export function activityOptions({ tasks, entries, contributions }: Snapshot) {
+  const names = new Map<string, string>([[categoryKey(workActivity), workActivity]]);
+  for (const name of [
+    ...tasks.map(activityName),
+    ...entries.map(activityName),
+    ...contributions.map((entry) => towerName(entry.category)),
+  ]) {
+    const key = categoryKey(name);
+    if (!names.has(key)) names.set(key, name);
+  }
+  return [...names.values()].sort((a, b) => a.localeCompare(b, "pl"));
+}
+
+export function activityMatches(entry: Parameters<typeof activityName>[0], filter: string | null) {
+  return filter === null || categoryKey(activityName(entry)) === categoryKey(filter);
 }
 
 export function categoryMetrics(category: string): readonly Metric[] {

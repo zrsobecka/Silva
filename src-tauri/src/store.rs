@@ -37,6 +37,7 @@ struct Task {
     title: String,
     category: String,
     tower: Option<String>,
+    plan_group: Option<String>,
     cadence: String,
     detail: String,
     scheduled_for: Option<String>,
@@ -64,6 +65,7 @@ pub struct Draft {
     title: String,
     category: String,
     tower: Option<String>,
+    plan_group: Option<String>,
     cadence: String,
     detail: String,
     scheduled_for: Option<String>,
@@ -119,7 +121,7 @@ impl Store {
             transaction.pragma_query_value(None, "user_version", |row| row.get(0))?;
         match version {
             0 => transaction.execute_batch(include_str!("schema.sql"))?,
-            1..=4 => {}
+            1..=5 => {}
             _ => return Err(rusqlite::Error::InvalidQuery),
         }
         if version < 2 {
@@ -139,6 +141,12 @@ impl Store {
                     task_id INTEGER NOT NULL REFERENCES tasks(id)
                  );
                  PRAGMA user_version = 4;",
+            )?;
+        }
+        if version < 5 {
+            transaction.execute_batch(
+                "ALTER TABLE tasks ADD COLUMN plan_group TEXT CHECK (length(plan_group) <= 32);
+                 PRAGMA user_version = 5;",
             )?;
         }
         transaction.commit()?;
@@ -189,7 +197,8 @@ fn snapshot(connection: &Connection, day: NaiveDate) -> Result<Snapshot> {
     let mut query = connection.prepare(
         "SELECT id, title, category, cadence, detail, scheduled_for, archived,
           EXISTS(SELECT 1 FROM entries WHERE task_id = tasks.id AND period = CASE tasks.cadence
-            WHEN 'daily' THEN ?1 WHEN 'weekly' THEN ?2 WHEN 'monthly' THEN ?3 ELSE tasks.cadence END), tower
+            WHEN 'daily' THEN ?1 WHEN 'weekly' THEN ?2 WHEN 'monthly' THEN ?3 ELSE tasks.cadence END),
+          tower, plan_group
          FROM tasks ORDER BY id",
     )?;
     let tasks = query
@@ -210,6 +219,7 @@ fn snapshot(connection: &Connection, day: NaiveDate) -> Result<Snapshot> {
                     archived: row.get(6)?,
                     done: row.get(7)?,
                     tower: row.get(8)?,
+                    plan_group: row.get(9)?,
                 })
             },
         )?
@@ -277,12 +287,23 @@ fn set_focus(connection: &Connection, task_id: Option<i64>, day: NaiveDate) -> R
 
 fn save(connection: &Connection, draft: Draft) -> Result<()> {
     let title = required(&draft.title, 100, "Podaj nazwę do 100 znaków.")?;
-    let category = required(&draft.category, 32, "Podaj grupę do 32 znaków.")?;
-    let tower = draft
-        .tower
-        .as_deref()
-        .map(|name| required(name, 32, "Podaj nazwę wieży do 32 znaków."))
-        .transpose()?;
+    let category = draft.category.trim();
+    // None preserves legacy inference. Some("") means no activity.
+    let tower = draft.tower.as_deref().map(str::trim);
+    let plan_group = draft.plan_group.as_deref().map(str::trim);
+    if plan_group.is_some_and(|name| name.chars().count() > 32) {
+        return Err(Error::Input("Nazwa grupy może mieć najwyżej 32 znaki."));
+    }
+    if category.chars().count() > 32 {
+        return Err(Error::Input(
+            "Nazwa starszej grupy może mieć najwyżej 32 znaki.",
+        ));
+    }
+    if tower.is_some_and(|name| name.chars().count() > 100) {
+        return Err(Error::Input(
+            "Nazwa aktywności może mieć najwyżej 100 znaków.",
+        ));
+    }
     let detail = draft.detail.trim();
     if detail.chars().count() > 240 {
         return Err(Error::Input("Opis może mieć najwyżej 240 znaków."));
@@ -304,15 +325,16 @@ fn save(connection: &Connection, draft: Draft) -> Result<()> {
 
     if let Some(id) = draft.id {
         if connection.execute(
-            "UPDATE tasks SET title = ?1, category = ?2, cadence = ?3, detail = ?4, scheduled_for = ?5, tower = ?6 WHERE id = ?7",
-            params![title, category, draft.cadence, detail, scheduled_for, tower, id],
+            "UPDATE tasks SET title = ?1, category = ?2, cadence = ?3, detail = ?4, scheduled_for = ?5, tower = ?6,
+              plan_group = COALESCE(?7, plan_group) WHERE id = ?8",
+            params![title, category, draft.cadence, detail, scheduled_for, tower, plan_group, id],
         )? == 0 {
             return Err(Error::Input("To zadanie już nie istnieje."));
         }
     } else {
         connection.execute(
-            "INSERT INTO tasks (title, category, cadence, detail, scheduled_for, tower) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![title, category, draft.cadence, detail, scheduled_for, tower],
+            "INSERT INTO tasks (title, category, cadence, detail, scheduled_for, tower, plan_group) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![title, category, draft.cadence, detail, scheduled_for, tower, plan_group],
         )?;
     }
     Ok(())
@@ -436,6 +458,7 @@ mod tests {
                 title: "Uporządkować notatki".into(),
                 category: "Organizacja".into(),
                 tower: tower.map(str::to_owned),
+                plan_group: None,
                 cadence: "daily".into(),
                 detail: String::new(),
                 scheduled_for: None,
@@ -457,6 +480,39 @@ mod tests {
         let result = store.apply_on(change_tower(None), today).unwrap();
         assert_eq!(result.entries.len(), 2);
         assert!(result.entries.iter().all(|entry| entry.tower.is_none()));
+        let result = store.apply_on(change_tower(Some("")), today).unwrap();
+        assert_eq!(result.tasks[0].tower.as_deref(), Some(""));
+        assert_eq!(result.entries.len(), 2);
+        assert!(result
+            .entries
+            .iter()
+            .all(|entry| entry.tower.as_deref() == Some("")));
+    }
+
+    #[test]
+    fn changing_a_plan_group_leaves_progress_metadata_intact() {
+        let mut store = store_with_tasks();
+        let yesterday = day(2026, 11, 5);
+        let today = day(2026, 11, 6);
+        let previous = complete_on(&mut store, 1, yesterday);
+        let draft = Draft {
+            id: Some(1),
+            title: previous.tasks[0].title.clone(),
+            category: previous.tasks[0].category.clone(),
+            tower: previous.tasks[0].tower.clone(),
+            plan_group: Some("Nauka".into()),
+            cadence: "daily".into(),
+            detail: String::new(),
+            scheduled_for: None,
+        };
+        store.apply_on(Action::Save { draft }, today).unwrap();
+        let result = complete_on(&mut store, 1, today);
+        assert_eq!(result.tasks[0].plan_group.as_deref(), Some("Nauka"));
+        assert_eq!(result.entries.len(), 2);
+        for entry in result.entries {
+            assert_eq!(entry.category, previous.entries[0].category);
+            assert_eq!(entry.tower, previous.entries[0].tower);
+        }
     }
 
     #[test]
@@ -581,6 +637,7 @@ mod tests {
             title: "Przygotować wystawę objazdową".into(),
             category: "Praca".into(),
             tower: None,
+            plan_group: None,
             cadence: "goal".into(),
             detail: String::new(),
             scheduled_for: None,
@@ -601,6 +658,7 @@ mod tests {
             title: "Zakupy".into(),
             category: "Dom".into(),
             tower: None,
+            plan_group: None,
             cadence: "once".into(),
             detail: String::new(),
             scheduled_for: Some("2026-11-07".into()),

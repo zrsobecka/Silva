@@ -2,23 +2,26 @@ import { useState } from "react";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import {
   activityHistory,
-  categoryKey,
+  activityMatches,
   metricTotals,
+  noActivityLabel,
   type Contribution,
 } from "../contributions/model";
 import { dateLabel, entryCount, type Snapshot } from "../plan/model";
 import { ActivityRows } from "./ActivityRows";
 import { Mosaic, colorStyle, entryKey } from "./Mosaic";
-import { activityName, periodBounds, periodEntries, shiftPeriod, type Range } from "./mosaicModel";
+import { periodBounds, periodEntries, shiftPeriod, type Range } from "./mosaicModel";
 
 export function Progress({
   snapshot,
+  activities,
   onToday,
   onAdd,
   onEdit,
   onLink,
 }: {
   snapshot: Snapshot;
+  activities: string[];
   onToday: () => void;
   onAdd: (category: string) => void;
   onEdit: (entry: Contribution) => void;
@@ -26,21 +29,14 @@ export function Progress({
 }) {
   const [anchor, setAnchor] = useState(snapshot.today);
   const [range, setRange] = useState<Range>("week");
-  const [activity, setActivity] = useState("");
+  const [activity, setActivity] = useState<string | null>(null);
   const [selected, setSelected] = useState("");
   const [limit, setLimit] = useState(20);
   const history = activityHistory(snapshot.entries, snapshot.contributions);
-  const names = new Map<string, string>();
-  [...snapshot.tasks.filter((t) => !t.archived), ...history].forEach((e) => {
-    const name = activityName(e);
-    names.set(categoryKey(name), name);
-  });
-  const activities = [...names.values()].sort((a, b) => a.localeCompare(b, "pl"));
-  const active = activities.includes(activity) ? activity : "";
+  const active = activity !== null && activities.includes(activity) ? activity : null;
+  const activeLabel = active === "" ? noActivityLabel : active;
   const entries = periodEntries(history, anchor, range, snapshot.today);
-  const shown = entries.filter(
-    (e) => !active || categoryKey(activityName(e)) === categoryKey(active),
-  );
+  const shown = entries.filter((entry) => activityMatches(entry, active));
   const picked = entries.find((e) => entryKey(e) === selected);
   const bounds = periodBounds(anchor, range);
   const next = shiftPeriod(anchor, range, 1);
@@ -86,7 +82,7 @@ export function Progress({
             </button>
           ))}
         </div>
-        <button className="secondary-button" onClick={() => onAdd(active)}>
+        <button className="secondary-button" onClick={() => onAdd(active ?? "")}>
           <Plus size={16} /> Dodaj wkład
         </button>
       </div>
@@ -121,9 +117,9 @@ export function Progress({
         </div>
         <div className="mosaic-filters" role="group" aria-label="Wyróżnij aktywność">
           <button
-            aria-pressed={!active}
+            aria-pressed={active === null}
             onClick={() => {
-              setActivity("");
+              setActivity(null);
               setSelected("");
               setLimit(20);
             }}
@@ -135,19 +131,19 @@ export function Progress({
               key={name}
               aria-pressed={active === name}
               onClick={() => {
-                setActivity(active === name ? "" : name);
+                setActivity(active === name ? null : name);
                 setSelected("");
                 setLimit(20);
               }}
             >
               <span className="mosaic-dot" style={colorStyle(name)} aria-hidden="true" />
-              {name}
+              {name || noActivityLabel}
             </button>
           ))}
         </div>
         <p className="mosaic-summary" aria-live="polite">
           {entryCount(shown.length)} · Dni z aktywnością: {new Set(shown.map((e) => e.day)).size}
-          {active ? ` · ${active}` : ""}
+          {activeLabel ? ` · ${activeLabel}` : ""}
         </p>
         <Mosaic
           entries={entries}
@@ -176,12 +172,15 @@ export function Progress({
       </section>
       <section className="panel task-panel" aria-label="Historia aktywności">
         <div className="panel-heading">
-          <h2>{active || "Historia aktywności"}</h2>
+          <h2>{activeLabel ?? "Historia aktywności"}</h2>
           <span className="panel-count">{entryCount(shown.length)}</span>
         </div>
         {!shown.length ? (
           <div className="history-empty">
-            <p>W tym okresie nie ma jeszcze wpisów{active ? ` dla aktywności „${active}”` : ""}.</p>
+            <p>
+              W tym okresie nie ma jeszcze wpisów{activeLabel ? ` dla filtra „${activeLabel}”` : ""}
+              .
+            </p>
             <button className="quiet-button" onClick={onToday}>
               Przejdź do dzisiaj
             </button>

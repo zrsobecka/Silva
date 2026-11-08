@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { Entry } from "../plan/model";
+import { activityMatches, activityName, activityOptions } from "../contributions/model";
+import { groupPlanTasks, planSection, type Entry, type Task } from "../plan/model";
 import {
-  activityName,
   activityColor,
   periodBounds,
   shiftPeriod,
@@ -42,6 +42,22 @@ describe("mozaika", () => {
     expect(activityName({ ...entry, tower: null, category: "Ruch" })).toBe("Ruch");
     expect(activityName({ ...entry, tower: null })).toBe("Zagrać");
   });
+  it("filtr odróżnia brak aktywności od wszystkich aktywności i zachowuje stare nazwy", () => {
+    const unassigned = { ...entry, id: 2, tower: "", category: "" };
+    const legacy = { ...entry, id: 3, tower: null };
+    expect(
+      activityOptions({
+        today: entry.day,
+        focusTaskId: null,
+        tasks: [],
+        entries: [entry, legacy, unassigned],
+        contributions: [],
+      }),
+    ).toEqual(["", "League of Legends", "Praca", "Zagrać"]);
+    expect(activityMatches(unassigned, "")).toBe(true);
+    expect(activityMatches(legacy, "")).toBe(false);
+    expect(activityMatches(legacy, null)).toBe(true);
+  });
   it("miesiąc ma rozłączne tygodnie i nie gubi ostatniego dnia", () => {
     const buckets = mosaicBuckets("2026-11-08", "month");
     expect(buckets[0]).toEqual({ start: "2026-11-01", end: "2026-11-01" });
@@ -63,4 +79,55 @@ describe("mozaika", () => {
     expect(periodEntries([entry, manual], "2025-12-31", "month", "2026-01-01")).toHaveLength(2);
     expect(activityName(manual)).toBe("Programowanie");
   });
+});
+
+it("Plan rozdziela zadania, nawyki, cele i nowe lub starsze sprawy z pracy", () => {
+  const task: Task = {
+    id: 1,
+    title: "Przygotować notatki",
+    category: "",
+    tower: "",
+    cadence: "once",
+    detail: "",
+    scheduledFor: null,
+    archived: false,
+    done: false,
+  };
+  expect(planSection(task)).toBe("tasks");
+  expect(planSection({ ...task, cadence: "weekly" })).toBe("habits");
+  expect(planSection({ ...task, cadence: "goal" })).toBe("goals");
+  expect(planSection({ ...task, tower: "praca", cadence: "weekly" })).toBe("work");
+  const legacyWork = { ...task, category: "Praca", tower: "Programowanie" };
+  expect(planSection(legacyWork)).toBe("work");
+  expect(activityName(legacyWork)).toBe("Programowanie");
+});
+
+it("grupy Planu łączą konkretne aktywności i zachowują stare oraz ręczne przypisania", () => {
+  const task: Task = {
+    id: 1,
+    title: "Zagrać mecz",
+    category: "",
+    tower: "LoL",
+    cadence: "once",
+    detail: "",
+    scheduledFor: null,
+    archived: false,
+    done: false,
+  };
+  const habit = { ...task, id: 2, tower: "Genshin", cadence: "weekly" as const };
+  const legacy = { ...task, id: 3, category: "Nauka", tower: "Programowanie" };
+  const manual = { ...task, id: 4, planGroup: "Projekty", tower: "Cyberbezpieczeństwo" };
+  const automatic = { ...legacy, id: 5, planGroup: "" };
+  const unassigned = { ...task, id: 6, title: "Odebrać paczkę", tower: "" };
+  const tasks = [task, habit, legacy, manual, automatic, unassigned];
+
+  expect(groupPlanTasks(tasks).filter(({ items }) => items.length > 0)).toEqual([
+    { group: "Gry", items: [task, habit] },
+    { group: "Programowanie", items: [automatic] },
+    { group: "Nauka", items: [legacy] },
+    { group: "Projekty", items: [manual] },
+    { group: null, items: [unassigned] },
+  ]);
+  expect(activityName(habit)).toBe("Genshin Impact");
+  expect(activityName(manual)).toBe("Cyberbezpieczeństwo");
 });

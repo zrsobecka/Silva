@@ -3,8 +3,8 @@
 Silva to lokalna aplikacja na Windows do zapisywania codziennych działań i postępów w dłuższych celach.
 
 - **Dzisiaj** pozwala przypiąć jeden następny krok na dziś i szybko dodać pojedynczą sprawę. Pokazuje też nawyki, zadania tygodniowe i miesięczne oraz dzisiejsze wpisy. Odhaczenie pozycji zapisuje ją w historii. Drugie kliknięcie cofa wpis.
-- **Plan** służy do dodawania i edytowania zadań, grup i celów. W polu grupy można wpisać własną nazwę. Archiwizacja chowa pozycję z planu, zachowując jej historię.
-- W edycji zadania można wybrać **Aktywność w postępie**. Dotychczasowe i nowe wpisy tego zadania liczą się w wybranej aktywności, a grupa w Planie i zapisana historia pozostają bez zmian.
+- **Plan** pokazuje pozycje według typu (Zadania, Nawyki, Cele i Praca) lub według grup z ikonami, takich jak Gry, Ruch i Nauka. W obu widokach można filtrować po aktywności. Przycisk **Archiwum** otwiera listę zarchiwizowanych pozycji, które można przywrócić.
+- **Grupa w Planie** służy do porządkowania zadań. Możesz ją wybrać samodzielnie lub pozwolić Silvie dopasować ją według aktywności. **Aktywność w Postępie** określa, gdzie trafiają wcześniejsze i przyszłe wykonania. Zadanie z pustym polem aktywności też trafia do historii po odhaczeniu.
 - **Dodaj wkład** zapisuje w historii zrobioną rzecz z wybraną datą i obszarem. W zależności od obszaru można podać liczby, np. minuty, pytania czy mecze Solo Queue i Flex. Wpis może mieć link.
 - **Postęp** pokazuje mozaikę tygodnia, miesiąca lub roku. Jeden wpis to jeden kwadrat, a stały kolor oznacza aktywność. Kliknięcie nazwy wyróżnia aktywność i filtruje historię; kliknięcie kwadratu pokazuje szczegóły, a miesiąca w roku otwiera jego mozaikę. Ręczne wkłady można edytować, a zapisane ilości sumują się dla wybranej aktywności.
 

@@ -8,7 +8,7 @@ import {
   Plus,
   Target,
 } from "lucide-react";
-import { activityHistory, towerName } from "../contributions/model";
+import { activityHistory, activityName } from "../contributions/model";
 import { TaskRow, type TaskControls } from "./TaskRow";
 import { entryCount, isUpcoming, type Snapshot, type Task } from "./model";
 import logo from "../../assets/brand/silva.png";
@@ -142,13 +142,13 @@ function QuickTask({ busy, onAdd }: { busy: boolean; onAdd: (title: string) => P
 
 function NextStep({
   task,
-  completedTower,
+  completedActivity,
   options,
   controls,
   onFocus,
 }: {
   task?: Task;
-  completedTower?: string;
+  completedActivity?: string;
   options: Task[];
   controls: TaskControls;
   onFocus: (taskId: number | null) => void;
@@ -167,9 +167,11 @@ function NextStep({
         </ul>
       )}
       <div className="today-card-body">
-        {completedTower && (
+        {completedActivity !== undefined && (
           <p className="step-complete" role="status">
-            Kwadrat w aktywności „{completedTower}”.
+            {completedActivity
+              ? `Kwadrat w aktywności „${completedActivity}”.`
+              : "Zapisano w historii bez aktywności."}
           </p>
         )}
         {options.length > 0 || task ? (
@@ -180,11 +182,15 @@ function NextStep({
             disabled={controls.busy}
           >
             <option value="">{task ? "Odepnij krok" : "Wybierz jedną rzecz na dziś"}</option>
-            {options.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.title} · {option.category}
-              </option>
-            ))}
+            {options.map((option) => {
+              const activity = activityName(option);
+              return (
+                <option key={option.id} value={option.id}>
+                  {option.title}
+                  {activity && activity !== option.title ? ` · ${activity}` : ""}
+                </option>
+              );
+            })}
           </select>
         ) : (
           <p>Dodaj pojedynczą sprawę, żeby wybrać pierwszy krok na dziś.</p>
@@ -241,9 +247,7 @@ export function Today({
       <div className="today-grid">
         <NextStep
           task={focus}
-          completedTower={
-            focusEntry ? towerName(focusEntry.tower ?? focusEntry.category) : undefined
-          }
+          completedActivity={focusEntry ? activityName(focusEntry) : undefined}
           options={focusOptions}
           controls={controls}
           onFocus={onFocus}
