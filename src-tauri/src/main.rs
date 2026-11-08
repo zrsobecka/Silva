@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod profile;
 mod store;
 
 use std::{path::PathBuf, sync::Mutex};
@@ -8,7 +9,7 @@ use tauri::{Manager, State};
 use store::{Action, Snapshot, Store};
 
 struct Database {
-    directory: PathBuf,
+    profile: profile::Profile,
     store: Mutex<Option<Store>>,
 }
 
@@ -24,8 +25,8 @@ impl Database {
         if guard.is_none() {
             let message =
                 "Nie udało się otworzyć lokalnej bazy Silvy. Spróbuj ponownie.".to_string();
-            std::fs::create_dir_all(&self.directory).map_err(|_| message.clone())?;
-            *guard = Some(Store::open(&self.directory.join("silva.sqlite3")).map_err(|_| message)?);
+            let path = self.profile.prepare()?;
+            *guard = Some(Store::open(&path).map_err(|_| message)?);
         }
         operation(guard.as_mut().expect("database initialized")).map_err(report_error)
     }
@@ -111,12 +112,18 @@ fn main() {
             #[cfg(windows)]
             style_title_bar(app);
 
-            let directory = match std::env::var_os("SILVA_DATA_DIR") {
-                Some(path) if PathBuf::from(&path).is_absolute() => PathBuf::from(path),
-                _ => app.path().app_local_data_dir()?,
+            let profile = match std::env::var_os("SILVA_DATA_DIR") {
+                Some(path) if PathBuf::from(&path).is_absolute() => profile::Profile {
+                    directory: PathBuf::from(path),
+                    legacy: Vec::new(),
+                },
+                _ => profile::Profile::for_home(
+                    &app.path().home_dir()?,
+                    app.path().app_local_data_dir()?,
+                ),
             };
             app.manage(Database {
-                directory,
+                profile,
                 store: Mutex::new(None),
             });
             Ok(())

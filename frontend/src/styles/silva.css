@@ -305,19 +305,21 @@ p {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  min-height: 174px;
-  padding: 26px 33px;
+  min-height: 112px;
+  padding: 15px 17px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  border-radius: var(--radius);
-  border: 1px solid #28535a;
+  gap: 10px;
+  border-radius: var(--radius) var(--radius) 0 0;
   background: #10252b;
   background-image:
     linear-gradient(100deg, #11272e 7%, #11262cec 40%, #10252b5e 100%),
     repeating-linear-gradient(0deg, transparent 0 23px, #3c76775c 23px 24px),
     repeating-linear-gradient(90deg, transparent 0 23px, #3c76775c 23px 24px);
+}
+.daily-summary:only-child {
+  border-radius: var(--radius);
 }
 .summary-copy {
   position: relative;
@@ -325,7 +327,7 @@ p {
 }
 .summary-copy h2 {
   margin: 8px 0 4px;
-  font-size: clamp(25px, 3.2vw, 36px);
+  font-size: clamp(20px, 2vw, 27px);
   line-height: 1.12;
   letter-spacing: -0.047em;
   font-weight: 675;
@@ -358,9 +360,8 @@ p {
 }
 .progress-ring {
   position: relative;
-  flex: 0 0 111px;
-  height: 111px;
-  margin-right: 5px;
+  flex: 0 0 72px;
+  height: 72px;
 }
 .progress-ring svg {
   display: block;
@@ -386,11 +387,11 @@ p {
   color: var(--text);
 }
 .ring-label strong {
-  font: 650 30px/1 var(--mono);
+  font: 650 23px/1 var(--mono);
   letter-spacing: -0.09em;
 }
 .ring-label small {
-  font-size: 15px;
+  font-size: 12px;
   margin-left: 3px;
   color: var(--accent);
 }
@@ -548,40 +549,45 @@ p {
   color: var(--muted);
   font-size: 13px;
 }
-.section-add {
-  margin-left: auto;
+.next-step {
+  border-color: #28535a;
+}
+.today-card-body {
+  display: grid;
+  gap: 8px;
+  margin: 0 15px;
+  padding: 0 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.today-card-body select {
+  width: 100%;
+  min-width: 0;
+}
+.today-card-body .step-complete {
   color: var(--accent);
 }
-.panel-count + .section-add {
-  margin-left: 0;
+.today-activity-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text);
+  overflow-wrap: anywhere;
 }
-.history-link {
-  border-radius: 11px;
-  border: 1px solid #284751;
-  background: #10252d;
-  min-height: 50px;
-  padding: 10px 12px;
+.today-card-body .history-action {
+  justify-self: start;
+  color: var(--accent);
+}
+.quick-task {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 9px;
-  color: var(--muted);
-  font-size: 12px;
-  text-align: left;
+  align-items: end;
+  gap: 8px;
+  padding: 0 15px 14px;
 }
-.history-link:hover {
-  background: #16333c;
-}
-.history-link > span {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.history-link strong,
-.history-action {
-  color: var(--accent);
-  font-weight: 650;
+.quick-task .field {
+  flex: 1 1 165px;
 }
 
 .panel-toolbar {
@@ -1193,18 +1199,6 @@ select {
   .today-grid {
     grid-template-columns: 1fr;
   }
-  .daily-summary {
-    min-height: 143px;
-    padding: 16px 21px;
-  }
-  .progress-ring {
-    flex-basis: 85px;
-    height: 85px;
-    margin-right: 0;
-  }
-  .ring-label strong {
-    font-size: 24px;
-  }
   .year-grid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
@@ -1293,10 +1287,6 @@ select {
   }
   .daily-summary {
     padding: 13px;
-    min-height: 125px;
-  }
-  .summary-copy h2 {
-    font-size: 23px;
   }
   .summary-copy p {
     font-size: 12px;

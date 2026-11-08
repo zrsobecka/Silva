@@ -300,7 +300,27 @@ export function App() {
           <Today
             snapshot={snapshot}
             controls={controls}
-            onNew={openNew}
+            onAddOneOff={(title) =>
+              run(
+                {
+                  type: "save",
+                  draft: {
+                    title,
+                    category: "Sprawy bieżące",
+                    cadence: "once",
+                    detail: "",
+                    scheduledFor: null,
+                  },
+                },
+                "Dodano pojedynczą sprawę.",
+              )
+            }
+            onFocus={(taskId) =>
+              void run(
+                { type: "setFocus", taskId },
+                taskId === null ? "Usunięto przypięcie." : "Przypięto krok na dziś.",
+              )
+            }
             onProgress={() => navigate("progress")}
           />
         )}

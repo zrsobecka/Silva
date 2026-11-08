@@ -24,6 +24,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     today: String,
+    focus_task_id: Option<i64>,
     tasks: Vec<Task>,
     entries: Vec<Entry>,
     contributions: Vec<contributions::Contribution>,
@@ -71,13 +72,34 @@ pub struct Draft {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Action {
-    Save { draft: Draft },
-    Archive { id: i64, archived: bool },
-    Complete { id: i64, done: bool },
-    AddStep { id: i64, note: String },
-    RemoveStep { id: i64 },
-    SaveContribution { draft: contributions::Draft },
-    RemoveContribution { id: i64 },
+    Save {
+        draft: Draft,
+    },
+    Archive {
+        id: i64,
+        archived: bool,
+    },
+    Complete {
+        id: i64,
+        done: bool,
+    },
+    #[serde(rename_all = "camelCase")]
+    SetFocus {
+        task_id: Option<i64>,
+    },
+    AddStep {
+        id: i64,
+        note: String,
+    },
+    RemoveStep {
+        id: i64,
+    },
+    SaveContribution {
+        draft: contributions::Draft,
+    },
+    RemoveContribution {
+        id: i64,
+    },
 }
 
 pub struct Store(Connection);
@@ -97,7 +119,7 @@ impl Store {
             transaction.pragma_query_value(None, "user_version", |row| row.get(0))?;
         match version {
             0 => transaction.execute_batch(include_str!("schema.sql"))?,
-            1..=3 => {}
+            1..=4 => {}
             _ => return Err(rusqlite::Error::InvalidQuery),
         }
         if version < 2 {
@@ -107,6 +129,16 @@ impl Store {
             transaction.execute_batch(
                 "ALTER TABLE tasks ADD COLUMN tower TEXT;
                  PRAGMA user_version = 3;",
+            )?;
+        }
+        if version < 4 {
+            transaction.execute_batch(
+                "CREATE TABLE daily_focus (
+                    slot INTEGER PRIMARY KEY CHECK (slot = 1),
+                    day TEXT NOT NULL,
+                    task_id INTEGER NOT NULL REFERENCES tasks(id)
+                 );
+                 PRAGMA user_version = 4;",
             )?;
         }
         transaction.commit()?;
@@ -137,6 +169,7 @@ impl Store {
                 )?;
             }
             Action::Complete { id, done } => complete(&transaction, id, done, day)?,
+            Action::SetFocus { task_id } => set_focus(&transaction, task_id, day)?,
             Action::AddStep { id, note } => add_step(&transaction, id, &note, day)?,
             Action::RemoveStep { id } => {
                 transaction.execute("DELETE FROM entries WHERE id = ?1 AND kind = 'step'", [id])?;
@@ -201,12 +234,45 @@ fn snapshot(connection: &Connection, day: NaiveDate) -> Result<Snapshot> {
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
+    let today = day.to_string();
+    let focus_task_id: Option<i64> = connection
+        .query_row(
+            "SELECT daily_focus.task_id FROM daily_focus JOIN tasks ON tasks.id = daily_focus.task_id
+             WHERE daily_focus.day = ?1 AND tasks.archived = 0 AND tasks.cadence != 'goal'
+               AND (tasks.scheduled_for IS NULL OR tasks.scheduled_for <= ?1)",
+            [&today],
+            |row| row.get(0),
+        )
+        .optional()?;
     Ok(Snapshot {
-        today: day.to_string(),
+        today,
+        focus_task_id,
         tasks,
         entries,
         contributions: contributions::list(connection)?,
     })
+}
+
+fn set_focus(connection: &Connection, task_id: Option<i64>, day: NaiveDate) -> Result<()> {
+    let Some(task_id) = task_id else {
+        connection.execute(
+            "DELETE FROM daily_focus WHERE slot = 1 AND day = ?1",
+            [day.to_string()],
+        )?;
+        return Ok(());
+    };
+    if connection.execute(
+        "INSERT INTO daily_focus (slot, day, task_id)
+         SELECT 1, ?1, id FROM tasks
+         WHERE id = ?2 AND archived = 0 AND cadence != 'goal'
+           AND (scheduled_for IS NULL OR scheduled_for <= ?1)
+         ON CONFLICT(slot) DO UPDATE SET day = excluded.day, task_id = excluded.task_id",
+        params![day.to_string(), task_id],
+    )? == 0
+    {
+        return Err(Error::Input("Tego zadania nie można wybrać na dziś."));
+    }
+    Ok(())
 }
 
 fn save(connection: &Connection, draft: Draft) -> Result<()> {
@@ -546,5 +612,41 @@ mod tests {
             Err(Error::Input(_))
         ));
         assert!(store.read().unwrap().entries.is_empty());
+    }
+
+    #[test]
+    fn daily_focus_can_be_replaced_completed_and_cleared_without_changing_history() {
+        let mut store = store_with_tasks();
+        let today = day(2026, 11, 6);
+        let tomorrow = day(2026, 11, 7);
+        let focus = |task_id| Action::SetFocus { task_id };
+
+        assert_eq!(
+            store.apply_on(focus(Some(1)), today).unwrap().focus_task_id,
+            Some(1)
+        );
+        assert!(matches!(
+            store.apply_on(focus(Some(4)), today),
+            Err(Error::Input(_))
+        ));
+        assert_eq!(snapshot(&store.0, today).unwrap().focus_task_id, Some(1));
+
+        let set_focus = serde_json::from_value(serde_json::json!({
+            "type": "setFocus", "taskId": 2
+        }))
+        .unwrap();
+        assert_eq!(
+            store.apply_on(set_focus, today).unwrap().focus_task_id,
+            Some(2)
+        );
+
+        let result = complete_on(&mut store, 2, today);
+        assert_eq!(result.focus_task_id, Some(2));
+        assert_eq!(result.entries.len(), 1);
+        assert_eq!(snapshot(&store.0, tomorrow).unwrap().focus_task_id, None);
+
+        let result = store.apply_on(focus(None), today).unwrap();
+        assert_eq!(result.focus_task_id, None);
+        assert_eq!(result.entries.len(), 1);
     }
 }

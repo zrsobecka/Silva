@@ -2,7 +2,7 @@
 
 Silva to lokalna aplikacja na Windows do zapisywania codziennych działań i postępów w dłuższych celach.
 
-- **Dzisiaj** pokazuje codzienne nawyki, sprawy bieżące oraz zadania na ten tydzień i miesiąc. Odhaczenie pozycji zapisuje ją w historii. Drugie kliknięcie cofa wpis.
+- **Dzisiaj** pozwala przypiąć jeden następny krok na dziś i szybko dodać pojedynczą sprawę. Pokazuje też nawyki, zadania tygodniowe i miesięczne oraz dzisiejsze wpisy. Odhaczenie pozycji zapisuje ją w historii. Drugie kliknięcie cofa wpis.
 - **Plan** służy do dodawania i edytowania zadań, grup i celów. W polu grupy można wpisać własną nazwę. Archiwizacja chowa pozycję z planu, zachowując jej historię.
 - W edycji zadania można wybrać **Wieżę postępu**. Dotychczasowe i nowe wpisy tego zadania liczą się w wybranej wieży, a grupa w Planie i zapisana historia pozostają bez zmian.
 - **Dodaj wkład** zapisuje w historii zrobioną rzecz z wybraną datą i obszarem. W zależności od obszaru można podać liczby, np. minuty, pytania czy mecze Solo Queue i Flex. Wpis może mieć link.
@@ -14,7 +14,7 @@ Po zbudowaniu aplikację otwiera skrót **Silva** na pulpicie lub plik `app/Silv
 
 ## Dane i prywatność
 
-Silva przechowuje zadania, cele i historię w lokalnej bazie SQLite. Domyślna ścieżka na Windows to `%LOCALAPPDATA%/app.silva.desktop/silva.sqlite3`. Aplikacja działa bez konta, synchronizacji i telemetrii. Publikacja kodu nie publikuje bazy. Katalogi z lokalnymi danymi, eksportami i pliki baz są też wykluczone przez `.gitignore`.
+Silva przechowuje zadania, cele i historię w lokalnej bazie SQLite. Domyślna ścieżka na Windows to `%USERPROFILE%/.silva/silva.sqlite3`. Przy pierwszym uruchomieniu z tą lokalizacją Silva kopiuje istniejący profil z AppData, uwzględniając kopię przekierowaną przez Windows dla Codex. Oryginały zostają zachowane; kilka różnych profili z zapisami wymaga rozstrzygnięcia zamiast automatycznego nadpisania. Aplikacja działa bez konta, synchronizacji i telemetrii. Publikacja kodu nie publikuje bazy. Katalogi z lokalnymi danymi, eksportami i pliki baz są też wykluczone przez `.gitignore`.
 
 ## Praca nad projektem
 

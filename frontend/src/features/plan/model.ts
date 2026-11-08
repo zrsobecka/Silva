@@ -39,6 +39,7 @@ export type Entry = {
 
 export type Snapshot = {
   today: string;
+  focusTaskId: number | null;
   tasks: Task[];
   entries: Entry[];
   contributions: Contribution[];
@@ -48,6 +49,7 @@ export type Action =
   | { type: "save"; draft: TaskDraft }
   | { type: "archive"; id: number; archived: boolean }
   | { type: "complete"; id: number; done: boolean }
+  | { type: "setFocus"; taskId: number | null }
   | { type: "addStep"; id: number; note: string }
   | { type: "removeStep"; id: number }
   | { type: "saveContribution"; draft: ContributionDraft }
