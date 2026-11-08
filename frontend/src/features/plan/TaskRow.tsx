@@ -1,4 +1,5 @@
 import { Check, ChevronRight, Pencil, RotateCcw, Target } from "lucide-react";
+import { activityName, noActivityLabel } from "../contributions/model";
 import { CategoryIcon } from "./CategoryIcon";
 import { cadences, dateLabel, isUpcoming, type Task } from "./model";
 
@@ -23,8 +24,10 @@ export function TaskRow({
   const goal = task.cadence === "goal";
   const scheduled = task.scheduledFor;
   const upcoming = isUpcoming(task, controls.today);
+  const activity = activityName(task);
   const meta = [
-    showCadence ? cadences[task.cadence] : task.category,
+    showCadence ? cadences[task.cadence] : "",
+    activity === task.title ? "" : activity || noActivityLabel,
     scheduled ? dateLabel(scheduled, { day: "numeric", month: "short" }) : "",
     task.detail,
   ].filter(Boolean);
@@ -32,7 +35,7 @@ export function TaskRow({
   return (
     <li className="task-row" data-done={task.done || undefined}>
       {goal || task.archived ? (
-        <CategoryIcon category={task.category} />
+        <CategoryIcon category={activity} />
       ) : (
         <button
           type="button"
@@ -48,7 +51,7 @@ export function TaskRow({
       )}
       <div className="task-copy">
         <strong>{task.title}</strong>
-        <small>{meta.join(" · ")}</small>
+        {meta.length > 0 && <small>{meta.join(" · ")}</small>}
       </div>
       {task.archived ? (
         <button
@@ -72,7 +75,7 @@ export function TaskRow({
               {task.done ? "Ukończony" : "Kroki"} <ChevronRight size={14} />
             </button>
           ) : (
-            <CategoryIcon category={task.category} />
+            <CategoryIcon category={activity} />
           )}
           <button
             className="icon-button task-edit"

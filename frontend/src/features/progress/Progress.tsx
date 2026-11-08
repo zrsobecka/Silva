@@ -1,297 +1,196 @@
 import { useState } from "react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import {
-  Activity,
-  ArrowRight,
-  CalendarDays,
-  ChartNoAxesCombined,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Footprints,
-  ListChecks,
-} from "lucide-react";
-import { CategoryIcon } from "../plan/CategoryIcon";
+  activityHistory,
+  activityMatches,
+  metricTotals,
+  noActivityLabel,
+  type Contribution,
+} from "../contributions/model";
 import { dateLabel, entryCount, type Snapshot } from "../plan/model";
-import { monthCalendar, shiftMonth, summarize } from "./analytics";
+import { ActivityRows } from "./ActivityRows";
+import { Mosaic, colorStyle, entryKey } from "./Mosaic";
+import { periodBounds, periodEntries, shiftPeriod, type Range } from "./mosaicModel";
 
-const weekdays = ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"];
-type Range = "month" | "year";
-
-function MonthChart({
-  month,
-  today,
-  counts,
-  selected,
-  onSelect,
+export function Progress({
+  snapshot,
+  activities,
+  onToday,
+  onAdd,
+  onEdit,
+  onLink,
 }: {
-  month: string;
-  today: string;
-  counts: Map<string, number>;
-  selected: string;
-  onSelect: (day: string) => void;
+  snapshot: Snapshot;
+  activities: string[];
+  onToday: () => void;
+  onAdd: (category: string) => void;
+  onEdit: (entry: Contribution) => void;
+  onLink: (link: string) => void;
 }) {
-  const { offset, dates } = monthCalendar(month);
-  return (
-    <>
-      <div className="month-grid">
-        {weekdays.map((label) => (
-          <span className="weekday" key={label}>
-            {label}
-          </span>
-        ))}
-        {Array.from({ length: offset }, (_, index) => (
-          <span key={`gap-${index}`} aria-hidden="true" />
-        ))}
-        {dates.map((day) => {
-          const count = counts.get(day) ?? 0;
-          return (
-            <button
-              className="day-cell"
-              key={day}
-              data-level={Math.min(4, count)}
-              aria-current={day === today ? "date" : undefined}
-              aria-pressed={day === selected}
-              title={`${dateLabel(day, { dateStyle: "full" })} · ${entryCount(count)}`}
-              aria-label={`${dateLabel(day, { dateStyle: "full" })} · ${entryCount(count)}`}
-              disabled={day > today}
-              onClick={() => onSelect(day === selected ? "" : day)}
-            >
-              <span>{Number(day.slice(-2))}</span>
-              {count > 0 && <strong>{count}</strong>}
-            </button>
-          );
-        })}
-      </div>
-      <div
-        className="chart-legend"
-        aria-label="Kolory pokazują liczbę wpisów w dniu, od zera do czterech lub więcej"
-      >
-        <span>0</span>
-        {[0, 1, 2, 3, 4].map((level) => (
-          <span className="legend-color" data-level={level} key={level} />
-        ))}
-        <span>4+ wpisy</span>
-      </div>
-    </>
-  );
-}
-
-function YearChart({
-  year,
-  today,
-  counts,
-  onSelect,
-}: {
-  year: string;
-  today: string;
-  counts: Map<string, number>;
-  onSelect: (month: string) => void;
-}) {
-  const maximum = Math.max(1, ...counts.values());
-  return (
-    <div className="year-grid">
-      {Array.from({ length: 12 }, (_, index) => {
-        const month = `${year}-${String(index + 1).padStart(2, "0")}`;
-        const count = counts.get(month) ?? 0;
-        const label = dateLabel(month, { month: "short" }).replace(".", "");
-        return (
-          <button
-            className="month-bar"
-            key={month}
-            disabled={month > today.slice(0, 7)}
-            title={`${dateLabel(month, { month: "long", year: "numeric" })} · ${entryCount(count)}`}
-            aria-label={`Pokaż ${dateLabel(month, { month: "long", year: "numeric" })} · ${entryCount(count)}`}
-            onClick={() => onSelect(month)}
-          >
-            <strong>{count}</strong>
-            <span className="bar-track">
-              <span style={{ height: `${(count / maximum) * 100}%` }} />
-            </span>
-            <span>{label}</span>
-          </button>
+  const [anchor, setAnchor] = useState(snapshot.today);
+  const [range, setRange] = useState<Range>("week");
+  const [activity, setActivity] = useState<string | null>(null);
+  const [selected, setSelected] = useState("");
+  const [limit, setLimit] = useState(20);
+  const history = activityHistory(snapshot.entries, snapshot.contributions);
+  const active = activity !== null && activities.includes(activity) ? activity : null;
+  const activeLabel = active === "" ? noActivityLabel : active;
+  const entries = periodEntries(history, anchor, range, snapshot.today);
+  const shown = entries.filter((entry) => activityMatches(entry, active));
+  const picked = entries.find((e) => entryKey(e) === selected);
+  const bounds = periodBounds(anchor, range);
+  const next = shiftPeriod(anchor, range, 1);
+  const previous = shiftPeriod(anchor, range, -1);
+  const label =
+    range === "week"
+      ? `${dateLabel(bounds.start, { day: "numeric", month: "short", year: "numeric" })} – ${dateLabel(bounds.end, { day: "numeric", month: "short", year: "numeric" })}`
+      : dateLabel(
+          bounds.start,
+          range === "month" ? { month: "long", year: "numeric" } : { year: "numeric" },
         );
-      })}
-    </div>
+  const totals = shown.reduce(
+    (acc, e) => {
+      if (e.kind === "contribution")
+        for (const [key, value] of Object.entries(e.metrics)) acc[key] = (acc[key] ?? 0) + value;
+      return acc;
+    },
+    {} as Record<string, number>,
   );
-}
-
-export function Progress({ snapshot, onToday }: { snapshot: Snapshot; onToday: () => void }) {
-  const currentMonth = snapshot.today.slice(0, 7);
-  const [month, setMonth] = useState(currentMonth);
-  const [range, setRange] = useState<Range>("month");
-  const [category, setCategory] = useState("");
-  const [selectedDay, setSelectedDay] = useState("");
-  const [expanded, setExpanded] = useState(false);
-  const year = month.slice(0, 4);
-  const categories = [...new Set(snapshot.entries.map((entry) => entry.category))].sort((a, b) =>
-    a.localeCompare(b, "pl"),
-  );
-  const summary = summarize(snapshot.entries, range === "month" ? month : year, category);
-  const activity = selectedDay
-    ? summary.shown.filter((entry) => entry.day === selectedDay)
-    : summary.shown;
-  const previous = range === "month" ? shiftMonth(month, -1) : shiftMonth(month, -12);
-  const next = range === "month" ? shiftMonth(month, 1) : shiftMonth(month, 12);
-  const canAdvance = range === "month" ? month < currentMonth : year < currentMonth.slice(0, 4);
-
-  function changeMonth(nextMonth: string) {
-    setMonth(nextMonth > currentMonth ? currentMonth : nextMonth);
-    setSelectedDay("");
-    setExpanded(false);
+  function change(day: string, newRange = range) {
+    setAnchor(day);
+    setRange(newRange);
+    setSelected("");
+    setLimit(20);
   }
-
-  function changeRange(nextRange: Range) {
-    setRange(nextRange);
-    setSelectedDay("");
-    setExpanded(false);
-  }
-
   return (
     <div className="view-stack">
       <div className="panel-toolbar">
         <div className="segmented" aria-label="Zakres postępu">
-          <button aria-pressed={range === "month"} onClick={() => changeRange("month")}>
-            <CalendarDays size={16} /> Miesiąc
-          </button>
-          <button aria-pressed={range === "year"} onClick={() => changeRange("year")}>
-            <ChartNoAxesCombined size={16} /> Rok
-          </button>
+          {(
+            [
+              ["week", "Tydzień"],
+              ["month", "Miesiąc"],
+              ["year", "Rok"],
+            ] as const
+          ).map(([value, text]) => (
+            <button
+              key={value}
+              aria-pressed={range === value}
+              onClick={() => change(anchor, value)}
+            >
+              {text}
+            </button>
+          ))}
         </div>
-        <label className="filter">
-          <span>Grupa</span>
-          <select
-            value={category}
-            onChange={(event) => {
-              setCategory(event.target.value);
-              setExpanded(false);
-            }}
-          >
-            <option value="">Wszystkie grupy</option>
-            {categories.map((name) => (
-              <option key={name}>{name}</option>
-            ))}
-          </select>
-        </label>
+        <button className="secondary-button" onClick={() => onAdd(active ?? "")}>
+          <Plus size={16} /> Dodaj wkład
+        </button>
       </div>
-      <div className="stats-grid">
-        <div className="panel stat">
-          <span>
-            <ListChecks size={17} /> Wykonane zadania
-          </span>
-          <strong>{summary.completed}</strong>
-        </div>
-        <div className="panel stat">
-          <span>
-            <Footprints size={17} /> Kroki w celach
-          </span>
-          <strong>{summary.steps}</strong>
-        </div>
-        <div className="panel stat">
-          <span>
-            <Activity size={17} /> Aktywne dni
-          </span>
-          <strong>{summary.days.size}</strong>
-        </div>
-      </div>
-      <section
-        className="panel chart-panel"
-        aria-label={range === "month" ? "Kalendarz postępu" : "Roczny wykres postępu"}
-      >
+      <section className="panel chart-panel" aria-labelledby="mosaic-heading">
         <div className="chart-header">
           <div>
-            <span className="kicker">
-              {range === "month" ? "KALENDARZ AKTYWNOŚCI" : "AKTYWNOŚĆ W MIESIĄCACH"}
-            </span>
-            <h2>
-              {range === "month" ? dateLabel(month, { month: "long", year: "numeric" }) : year}
-            </h2>
+            <span className="kicker">MOZAIKA AKTYWNOŚCI</span>
+            <h2 id="mosaic-heading">{label}</h2>
+            <p>Każdy kwadrat to jeden zapisany wkład. Kolor oznacza aktywność.</p>
           </div>
           <div className="period-controls">
             <button
               className="icon-button"
-              aria-label={range === "month" ? "Poprzedni miesiąc" : "Poprzedni rok"}
-              disabled={previous < "2000-01"}
-              onClick={() => changeMonth(previous)}
+              aria-label="Poprzedni okres"
+              disabled={previous < "2000-01-01"}
+              onClick={() => change(previous)}
             >
               <ChevronLeft size={20} />
             </button>
+            <button className="quiet-button" onClick={() => change(snapshot.today)}>
+              Bieżący
+            </button>
             <button
               className="icon-button"
-              aria-label={range === "month" ? "Następny miesiąc" : "Następny rok"}
-              disabled={!canAdvance}
-              onClick={() => changeMonth(next)}
+              aria-label="Następny okres"
+              disabled={next > snapshot.today}
+              onClick={() => change(next)}
             >
               <ChevronRight size={20} />
             </button>
           </div>
         </div>
-        {range === "month" ? (
-          <MonthChart
-            month={month}
-            today={snapshot.today}
-            counts={summary.days}
-            selected={selectedDay}
-            onSelect={(day) => {
-              setSelectedDay(day);
-              setExpanded(false);
+        <div className="mosaic-filters" role="group" aria-label="Wyróżnij aktywność">
+          <button
+            aria-pressed={active === null}
+            onClick={() => {
+              setActivity(null);
+              setSelected("");
+              setLimit(20);
             }}
-          />
-        ) : (
-          <YearChart
-            year={year}
-            today={snapshot.today}
-            counts={summary.months}
-            onSelect={(month) => {
-              changeMonth(month);
-              changeRange("month");
-            }}
-          />
+          >
+            Wszystkie
+          </button>
+          {activities.map((name) => (
+            <button
+              key={name}
+              aria-pressed={active === name}
+              onClick={() => {
+                setActivity(active === name ? null : name);
+                setSelected("");
+                setLimit(20);
+              }}
+            >
+              <span className="mosaic-dot" style={colorStyle(name)} aria-hidden="true" />
+              {name || noActivityLabel}
+            </button>
+          ))}
+        </div>
+        <p className="mosaic-summary" aria-live="polite">
+          {entryCount(shown.length)} · Dni z aktywnością: {new Set(shown.map((e) => e.day)).size}
+          {activeLabel ? ` · ${activeLabel}` : ""}
+        </p>
+        <Mosaic
+          entries={entries}
+          anchor={anchor}
+          range={range}
+          today={snapshot.today}
+          activity={active}
+          selected={selected}
+          onSelect={(key) => setSelected(selected === key ? "" : key)}
+          onMonth={(day) => change(day, "month")}
+        />
+        <div className="mosaic-detail" aria-live="polite">
+          {picked ? (
+            <ActivityRows entries={[picked]} onEdit={onEdit} onLink={onLink} />
+          ) : (
+            <p>
+              {range === "year"
+                ? "Wybierz miesiąc, aby zobaczyć jego wpisy."
+                : "Wybierz kwadrat, aby zobaczyć szczegóły działania."}
+            </p>
+          )}
+        </div>
+        {!!active && metricTotals(totals).length > 0 && (
+          <p className="mosaic-summary">Zapisane ilości: {metricTotals(totals).join(" · ")}</p>
         )}
       </section>
-      <section className="panel task-panel">
+      <section className="panel task-panel" aria-label="Historia aktywności">
         <div className="panel-heading">
-          <span className="heading-icon">
-            <Activity size={17} />
-          </span>
-          <h2>
-            {selectedDay
-              ? dateLabel(selectedDay, { day: "numeric", month: "long" })
-              : "Historia aktywności"}
-          </h2>
-          <span className="panel-count">{entryCount(activity.length)}</span>
+          <h2>{activeLabel ?? "Historia aktywności"}</h2>
+          <span className="panel-count">{entryCount(shown.length)}</span>
         </div>
-        {activity.length === 0 ? (
+        {!shown.length ? (
           <div className="history-empty">
-            <p>W tym widoku nie ma jeszcze wpisów.</p>
+            <p>
+              W tym okresie nie ma jeszcze wpisów{activeLabel ? ` dla filtra „${activeLabel}”` : ""}
+              .
+            </p>
             <button className="quiet-button" onClick={onToday}>
-              Przejdź do dzisiaj <ArrowRight size={16} />
+              Przejdź do dzisiaj
             </button>
           </div>
         ) : (
           <>
-            <ul className="task-list">
-              {(expanded ? activity : activity.slice(0, 10)).map((entry) => (
-                <li className="task-row" key={entry.id}>
-                  <CategoryIcon category={entry.category} />
-                  <div className="task-copy">
-                    <strong>{entry.kind === "step" ? entry.note : entry.title}</strong>
-                    <small>
-                      {entry.kind === "step" && `${entry.title} · `}
-                      {entry.category}
-                    </small>
-                  </div>
-                  <span className="entry-kind">
-                    {entry.kind === "step" ? <Footprints size={15} /> : <Check size={15} />}
-                  </span>
-                  <time dateTime={entry.day}>
-                    {dateLabel(entry.day, { day: "numeric", month: "short" })}
-                  </time>
-                </li>
-              ))}
-            </ul>
-            {activity.length > 10 && (
-              <button className="quiet-button show-more" onClick={() => setExpanded(!expanded)}>
-                {expanded ? "Pokaż mniej" : "Pokaż wszystkie wpisy"}
+            <ActivityRows entries={shown.slice(0, limit)} onEdit={onEdit} onLink={onLink} />
+            {shown.length > limit && (
+              <button className="quiet-button show-more" onClick={() => setLimit(limit + 50)}>
+                Pokaż kolejne wpisy
               </button>
             )}
           </>

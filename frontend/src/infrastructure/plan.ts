@@ -8,3 +8,7 @@ export function readPlan() {
 export function updatePlan(action: Action) {
   return invoke<Snapshot>("update_plan", { action });
 }
+
+export function openContributionLink(link: string) {
+  return invoke<void>("open_contribution_link", { link });
+}

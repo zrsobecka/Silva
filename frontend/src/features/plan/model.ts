@@ -1,3 +1,11 @@
+import {
+  activityName,
+  categoryKey,
+  workActivity,
+  type Contribution,
+  type ContributionDraft,
+} from "../contributions/model";
+
 export const cadences = {
   daily: "Codziennie",
   weekly: "Co tydzień",
@@ -8,10 +16,37 @@ export const cadences = {
 
 export type Cadence = keyof typeof cadences;
 
+export const planGroups = [
+  "Gry",
+  "Ruch",
+  "Programowanie",
+  "Hakowanie",
+  "Nauka",
+  workActivity,
+  "Projekty",
+  "Zdrowie",
+  "Dom",
+  "Samodzielność",
+] as const;
+
+export type PlanGroup = (typeof planGroups)[number];
+
+const groupsByActivity = new Map<string, PlanGroup>([
+  ["league of legends", "Gry"],
+  ["genshin impact", "Gry"],
+  ["cyberbezpieczeństwo", "Hakowanie"],
+  ["czytanie książek", "Nauka"],
+  ["oddychanie", "Zdrowie"],
+  ["gotowanie", "Dom"],
+  ["jazda samochodem", "Samodzielność"],
+]);
+
 export type TaskDraft = {
   id?: number;
   title: string;
   category: string;
+  tower?: string | null;
+  planGroup?: string | null;
   cadence: Cadence;
   detail: string;
   scheduledFor: string | null;
@@ -28,6 +63,7 @@ export type Entry = {
   taskId: number;
   title: string;
   category: string;
+  tower?: string | null;
   day: string;
   kind: "complete" | "step";
   note: string;
@@ -35,33 +71,60 @@ export type Entry = {
 
 export type Snapshot = {
   today: string;
+  focusTaskId: number | null;
   tasks: Task[];
   entries: Entry[];
+  contributions: Contribution[];
 };
 
 export type Action =
   | { type: "save"; draft: TaskDraft }
   | { type: "archive"; id: number; archived: boolean }
   | { type: "complete"; id: number; done: boolean }
+  | { type: "setFocus"; taskId: number | null }
   | { type: "addStep"; id: number; note: string }
-  | { type: "removeStep"; id: number };
+  | { type: "removeStep"; id: number }
+  | { type: "saveContribution"; draft: ContributionDraft }
+  | { type: "removeContribution"; id: number };
 
-const defaultCategories = ["Dom", "Gry", "Nauka", "Praca", "Ruch", "Samodzielność"];
+function knownPlanGroup(name: string) {
+  const key = categoryKey(name);
+  return key === "projekt" ? "Projekty" : planGroups.find((group) => categoryKey(group) === key);
+}
 
-export function allCategories(tasks: Task[]) {
-  return [...new Set([...defaultCategories, ...tasks.map((task) => task.category)])].sort(
-    (first, second) => first.localeCompare(second, "pl"),
+export function storedPlanGroup(task: Task) {
+  return knownPlanGroup(task.planGroup ?? task.category);
+}
+
+export function taskPlanGroup(task: Task) {
+  const activity = activityName(task);
+  return (
+    storedPlanGroup(task) ??
+    knownPlanGroup(activity) ??
+    groupsByActivity.get(categoryKey(activity)) ??
+    null
   );
 }
 
-export function groupTasks(tasks: Task[]) {
-  const groups = new Map<string, Task[]>();
+export function planSection(task: Task) {
+  if (taskPlanGroup(task) === workActivity) return "work";
+  if (task.cadence === "goal") return "goals";
+  return task.cadence === "once" ? "tasks" : "habits";
+}
+
+export function groupPlanTasks(tasks: Task[]) {
+  const groups = new Map<PlanGroup | null, Task[]>();
   for (const task of tasks) {
-    const group = groups.get(task.category) ?? [];
-    group.push(task);
-    groups.set(task.category, group);
+    const group = taskPlanGroup(task);
+    const items = groups.get(group) ?? [];
+    items.push(task);
+    groups.set(group, items);
   }
-  return [...groups].sort(([first], [second]) => first.localeCompare(second, "pl"));
+  const unassigned = groups.get(null);
+  return [
+    ...planGroups.map((group) => ({ group, items: groups.get(group) ?? [] })),
+    ...(unassigned ? [{ group: null, items: unassigned }] : []),
+  ];
 }
 
 export function isUpcoming(task: Task, today: string) {
