@@ -1,6 +1,8 @@
 import type { Entry, Task } from "../plan/model";
 
 const towerSettings = {
+  Cyberbezpieczeństwo: ["minutes"],
+  Ruch: ["minutes"],
   Oddychanie: ["minutes"],
   Programowanie: ["questions", "scripts", "tutorials", "minutes"],
   "League of Legends": ["soloQueue", "flex"],

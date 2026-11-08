@@ -155,13 +155,13 @@ export function TaskEditor({
           </label>
         </div>
         <label className="field">
-          Wieża postępu
+          Aktywność w postępie
           <select
             name="tower"
             defaultValue={task?.tower ? towerName(task.tower) : ""}
             aria-describedby="task-tower-help"
           >
-            <option value="">Według grupy z planu</option>
+            <option value="">Automatycznie: aktywność lub nazwa zadania</option>
             {towers.map((tower) => (
               <option key={tower} value={tower}>
                 {tower}

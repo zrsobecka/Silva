@@ -143,11 +143,11 @@ export function ContributionEditor({
           />
         </label>
         <p className="form-help">
-          Jeden wpis dodaje jedną cegiełkę. Podane ilości sumują się osobno.
+          Jeden wpis dodaje jeden kwadrat. Podane ilości sumują się osobno.
         </p>
         {entry && confirmRemoval ? (
           <div className="dialog-actions contribution-remove">
-            <p>Usunąć wpis wraz z jego cegiełką i ilościami?</p>
+            <p>Usunąć wpis wraz z jego kwadratem i ilościami?</p>
             <button
               className="quiet-button"
               type="button"

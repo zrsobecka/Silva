@@ -396,11 +396,11 @@ export function App() {
           onSave={async (draft) => {
             const message = draft.id
               ? "Zapisano zmiany we wkładzie."
-              : `Dodano cegiełkę do wieży „${draft.category}”.`;
+              : `Dodano wkład do aktywności „${draft.category}”.`;
             if (await run({ type: "saveContribution", draft }, message)) closeEditor();
           }}
           onRemove={async (id) => {
-            if (await run({ type: "removeContribution", id }, "Usunięto wkład i jego cegiełkę."))
+            if (await run({ type: "removeContribution", id }, "Usunięto wkład i jego kwadrat."))
               closeEditor();
           }}
         />

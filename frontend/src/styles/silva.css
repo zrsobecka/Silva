@@ -1334,3 +1334,148 @@ select {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* A stable color identifies an activity across all periods. */
+.mosaic-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 22px 0 16px;
+}
+.mosaic-filters button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.mosaic-filters button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--accent-surface);
+}
+.mosaic-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: var(--activity-color);
+  flex-shrink: 0;
+}
+.mosaic-summary {
+  color: var(--muted);
+  margin: 14px 0;
+  font-size: 13px;
+}
+.mosaic-grid {
+  display: grid;
+  gap: 22px;
+  padding: 16px 0;
+}
+.mosaic-week {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+.mosaic-month {
+  grid-template-columns: 1fr;
+}
+.mosaic-year {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.mosaic-bucket {
+  min-width: 0;
+}
+.mosaic-label {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.mosaic-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mosaic-square {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--activity-color);
+}
+.mosaic-square:hover {
+  filter: brightness(1.2);
+}
+.mosaic-square[aria-pressed="true"] {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+.mosaic-square[data-dim="true"],
+.mosaic-mini[data-dim="true"] {
+  opacity: 0.18;
+}
+.mosaic-mini {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--activity-color);
+}
+.mosaic-month {
+  text-align: left;
+}
+.mosaic-month .mosaic-marks {
+  gap: 6px;
+}
+button.mosaic-month {
+  display: block;
+  width: 100%;
+  background: transparent;
+  color: var(--text);
+  border: 0;
+  padding: 0;
+}
+button.mosaic-month:hover .mosaic-label {
+  color: var(--accent);
+}
+button.mosaic-month .mosaic-marks {
+  gap: 3px;
+}
+.mosaic-empty {
+  font-size: 12px;
+  color: var(--dim);
+}
+.mosaic-detail {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 12px;
+  min-height: 56px;
+}
+.mosaic-detail > p {
+  color: var(--muted);
+  font-size: 13px;
+}
+@media (max-width: 1000px) {
+  .mosaic-week {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .mosaic-year {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .mosaic-week,
+  .mosaic-year {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (pointer: coarse) {
+  .mosaic-square {
+    width: 44px;
+    height: 44px;
+  }
+  .mosaic-filters button {
+    min-height: 44px;
+  }
+}

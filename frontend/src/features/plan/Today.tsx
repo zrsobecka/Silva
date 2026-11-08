@@ -169,7 +169,7 @@ function NextStep({
       <div className="today-card-body">
         {completedTower && (
           <p className="step-complete" role="status">
-            Cegiełka w wieży „{completedTower}”.
+            Kwadrat w aktywności „{completedTower}”.
           </p>
         )}
         {options.length > 0 || task ? (
